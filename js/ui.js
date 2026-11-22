@@ -426,6 +426,8 @@ Tour.start = function (id, i = 0) {
   Tour.active.shade = shade; Tour.active.card = card;
   document.body.append(shade, card);
   document.body.classList.add('touring');
+  /* keep the spotlight on its target when the page scrolls or the layout shifts */
+  Tour.active.follow = setInterval(Tour.place, 300);
   Tour.show();
 };
 Tour.show = function () {
@@ -440,6 +442,7 @@ Tour.show = function () {
     if (ok) tgt.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
     const r = ok ? tgt.getBoundingClientRect() : null;
     const { shade, card } = A;
+    A.tgt = ok ? tgt : null;
     if (r) { const pad = 6; Object.assign(shade.style, { display: 'block', left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' }); }
     else shade.style.display = 'none';
     card.innerHTML = '';
@@ -486,13 +489,19 @@ Tour.show = function () {
     }
   });
 };
+Tour.place = function () {
+  const A = Tour.active; if (!A || !A.tgt || !A.tgt.isConnected || A.shade.style.display === 'none') return;
+  const r = A.tgt.getBoundingClientRect(), pad = 6;
+  Object.assign(A.shade.style, { left: r.left - pad + 'px', top: r.top - pad + 'px', width: r.width + pad * 2 + 'px', height: r.height + pad * 2 + 'px' });
+};
+window.addEventListener('scroll', () => { if (Tour.active) Tour.place(); }, true);
 Tour.go = function (d) {
   const A = Tour.active; if (!A) return;
   const n = A.i + d;
   if (n >= A.def.steps.length) { const done = A.def.onDone; Tour.stop(); if (done) done(); return; }
   A.i = clamp(n, 0, A.def.steps.length - 1); Tour.show();
 };
-Tour.stop = function () { const A = Tour.active; if (!A) return; clearInterval(A.poll); A.shade.remove(); A.card.remove(); Tour.active = null; document.body.classList.remove('touring'); };
+Tour.stop = function () { const A = Tour.active; if (!A) return; clearInterval(A.poll); clearInterval(A.follow); A.shade.remove(); A.card.remove(); Tour.active = null; document.body.classList.remove('touring'); };
 Tour.key = function (e) {
   if (!Tour.active) return false;
   if (e.key === 'Escape') { Tour.stop(); return true; }

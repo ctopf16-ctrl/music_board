@@ -1,8 +1,8 @@
 /* Beat Board · Chords screen
-   Chord pads that are always in key (with "good next" hints), a progression lane that edits the
-   scene's chord clip, and a scale-locked melody strip.
-   Keyboard: 1–8 hold pads, Q–P play the melody strip, ⇧ + letter picks a control,
-   ← → move the lane selection, Enter writes the last chord, Delete erases, Esc stops writing. */
+   Chord pads that are always in key (with "good next" hints), a progression lane of boxes that edits
+   the scene's chord clip, a rhythm section (how often each chord strikes), and a scale-locked melody strip.
+   Keyboard: 1–8 (number row or number pad) hold pads, Q–P play the melody strip, ⇧ + letter picks a
+   control, ← → move the selected box, Enter writes the last chord, Delete = "same as before", Esc stops writing. */
 (function () {
 'use strict';
 const BB = window.BB, { h } = BB, UI = BB.ui, TR = BB.transport, T = BB.theory, I = UI.ICONS;
@@ -16,6 +16,20 @@ const FLAVORS = [
   { id: 'sus', label: 'Sus', tip: 'Swaps the middle note for an open, floating sound that feels unfinished in a nice way.' },
   { id: 'add9', label: 'Add9', tip: 'Adds a high, sparkly note on top. Dreamy and modern.' },
 ];
+const BOX_FLAVORS = [
+  { id: 'triad', label: 'Simple', tip: 'Make just this chord a plain three-note chord.' },
+  { id: 'seventh', label: '7th', tip: 'Give just this chord a smooth, jazzy 7th.' },
+  { id: 'sus', label: 'Sus', tip: 'Make just this chord open and floating (suspended).' },
+  { id: 'add9', label: 'Add9', tip: 'Add a sparkly high note to just this chord.' },
+];
+const GRID_OPTS = [
+  { id: 4, label: 'Every bar', tip: 'One box per bar: a chord can change at the start of each bar. The simplest choice.' },
+  { id: 2, label: 'Half bar', tip: 'Two boxes per bar: chords can change on beats 1 and 3.' },
+  { id: 1, label: 'Every beat', tip: 'Four boxes per bar: a chord can change on any beat.' },
+];
+const PRESET_SMALL = { hold: 'rings out', x1: 'once', x2: 'twice', x4: 'every beat', x8: 'eighths', x16: 'sixteenths', off: 'off-beats', push: 'funky', charleston: 'Charleston' };
+const BASS_FOLLOW = [{ id: 'long', label: 'Long notes' }, { id: 'bounce', label: 'Bounce' }, { id: 'walk', label: 'Walking' }];
+const MEL_FOLLOW = [{ id: 'hook', label: 'Hook' }, { id: 'lazy', label: 'Lazy' }, { id: 'steady', label: 'Steady' }];
 /* "Good next" pads for each pad (indexes 0–6 are scale degrees, 7 is the borrowed pad). */
 const NEXT = {
   major:      [[3, 4, 5], [4, 3], [5, 3], [0, 4], [0, 5], [3, 1], [0, 2], [0, 4]],
@@ -33,6 +47,7 @@ const ROLE = {
   iii: 'Gentle and in-between. A nice bridge to vi or IV.',
   'iii°': 'Tense and unstable. Use it briefly.',
   III: 'The bright side of a minor key. It feels hopeful.',
+  'III+': 'Strange and dreamy. It adds a mysterious touch.',
   IV: 'Warm and open. It lifts the music away from home.',
   iv: 'Sad and heavy. It pulls back toward home.',
   V: 'Strong tension that wants to go home. Great at the end of a line.',
@@ -48,8 +63,9 @@ const BORROWED = {
   V: 'Borrowed from harmonic minor. A strong, dramatic pull back home to i.',
   bVII: 'Borrowed from the natural minor. A bold, rock-style chord that leads home.',
 };
-/* Extra numeral marks T.numeral leaves out, so "7ths" pads read Imaj7, ii7, V7… */
-const NUM_SFX = { maj7: 'maj7', m7: '7', m7b5: '7', sus2: 'sus2', sus4: 'sus4', add9: 'add9', madd9: 'add9', maj6: '6', m6: '6', aug: '+' };
+/* chord quality -> its basic triad, and -> which flavor it is */
+const BASE_Q = { maj: 'maj', maj7: 'maj', dom7: 'maj', add9: 'maj', maj6: 'maj', min: 'min', m7: 'min', madd9: 'min', m6: 'min', dim: 'dim', m7b5: 'dim', aug: 'aug' };
+const FLAVOR_OF = { maj: 'triad', min: 'triad', dim: 'triad', aug: 'triad', maj7: 'seventh', dom7: 'seventh', m7: 'seventh', m7b5: 'seventh', sus2: 'sus', sus4: 'sus', add9: 'add9', madd9: 'add9' };
 
 /* ================= UI state (the song itself is always read fresh from BB.store.p) ================= */
 const S = {
@@ -59,29 +75,36 @@ const S = {
   held: null,        // {source, pad} the pad this view is holding
   lit: null,         // 'root:q' of the live chord
   cur: null,         // 'root:q' of the chord under the playhead
-  sel: null,         // selected lane slot (place mode) or null
+  sel: null,         // first slot (beat) of the selected box, or null
+  grid: 4,           // preferred box size in beats (4 bar, 2 half bar, 1 beat)
   pendingBars: 4,    // length to use when the first chord creates the clip
   starter: '',       // last applied starter id (so ← → on the select steps through them)
   fresh: null,       // slot just written (flash it)
-  nowSlot: -1,       // slot under the playhead
+  nowBox: -1, nowStep: -1,
+  clipboard: null,   // copied box value
+  bassFollow: 'long', melFollow: 'hook',
+  paint: null,       // rhythm-strip drag: {on, group}
   melMode: BB.storage.get(STORE_MEL, 'penta') === 'scale' ? 'scale' : 'penta',
   melNotes: [], melSig: '', keySig: '',
   keyMidi: {},       // KeyQ… -> midi held from the keyboard
+  tour: {},          // values remembered at the start of tutorial steps
 };
-const E = { padEls: [], beatEls: [], melEls: [], blockAt: [] };
+const E = { padEls: [], boxEls: [], boxBySlot: {}, melEls: [], cells: [], presetBtns: [] };
 
 /* ================= helpers ================= */
 const curClip = () => BB.store.clip('chords', BB.state.scene);
 const slotCount = () => { const c = curClip(); return c ? c.slots.length : S.pendingBars * 4; };
+const boxSize = () => Math.min(S.grid, BB.chordGridNeeded(curClip()));
 const qInfo = q => T.QUALITIES[q] || T.QUALITIES.maj;
 const fullName = (r, q) => T.pcName(r) + ' ' + qInfo(q).name;
 const ckey = (r, q) => r + ':' + q;
 const nextFor = i => ((NEXT[BB.store.p.mode] || NEXT.major)[i]) || [];
-const where = slot => 'bar ' + (Math.floor(slot / 4) + 1) + ', beat ' + (slot % 4 + 1);
-function numeralOf(r, q) {
-  let n = T.numeral(BB.store.p.key, r, q);
-  const s = NUM_SFX[q]; if (s && !n.endsWith(s)) n += s;
-  return n;
+const numeralOf = (r, q) => T.numeral(BB.store.p.key, r, q);
+const orList = arr => (arr.length < 2 ? arr.join('') : arr.slice(0, -1).join(', ') + ' or ' + arr[arr.length - 1]);
+const info = scene => ({ info: { track: 'chords', scene } });
+function boxLabel(slot, g) {
+  const bar = Math.floor(slot / 4) + 1, b = slot % 4 + 1;
+  return g >= 4 ? 'Bar ' + bar : g === 2 ? 'Bar ' + bar + ', beats ' + b + '–' + (b + 1) : 'Bar ' + bar + ', beat ' + b;
 }
 /* Root big, the quality suffix smaller: "C" + "maj7" */
 function chordLabel(el, r, q) {
@@ -89,14 +112,38 @@ function chordLabel(el, r, q) {
   el.append(T.pcName(r));
   const sfx = qInfo(q).sfx; if (sfx) el.append(h('small', null, sfx));
 }
-const orList = arr => (arr.length < 2 ? arr.join('') : arr.slice(0, -1).join(', ') + ' or ' + arr[arr.length - 1]);
+/* What a box holds: a chord or rest that starts there, one carried over from the left, or nothing yet */
+function boxInfo(c, s) {
+  if (!c) return { kind: 'empty' };
+  const v = c.slots[s];
+  if (v && v.rest) return { kind: 'rest', start: true };
+  if (v) return { kind: 'chord', start: true, r: v.r, q: v.q };
+  const ch = BB.chordAt(c, s * 4);
+  if (ch) return { kind: 'chord', start: false, r: ch.root, q: ch.q, from: ch.slot };
+  let i = s - 1; while (i >= 0 && !c.slots[i]) i--;
+  return i >= 0 ? { kind: 'rest', start: false } : { kind: 'empty' };
+}
+/* Change a chord's flavor but keep its root (same rules as BB.theory.diatonic) */
+function baseOf(r, q) {
+  if (BASE_Q[q]) return BASE_Q[q];
+  const p = BB.store.p, d = T.degreeOf(r, p.key, p.mode);
+  return d >= 0 ? T.diatonic(p.key, p.mode, d, 'triad').q : 'maj';
+}
+function flavorQ(r, base, fl) {
+  const p = BB.store.p, d = T.degreeOf(r, p.key, p.mode);
+  if (d >= 0 && T.diatonic(p.key, p.mode, d, 'triad').q === base) return T.diatonic(p.key, p.mode, d, fl).q;
+  if (fl === 'seventh') return { maj: 'dom7', min: 'm7', dim: 'm7b5' }[base] || base;
+  if (fl === 'sus') return base === 'maj' || base === 'min' ? 'sus2' : base;
+  if (fl === 'add9') return { maj: 'add9', min: 'madd9' }[base] || base;
+  return base;
+}
 
 /* The 8 pads: the 7 chords of the key plus one borrowed chord */
 function buildPadChords() {
   const p = BB.store.p, fl = BB.state.chordFlavor || 'triad';
   const out = BB.range(7).map(d => {
     const c = T.diatonic(p.key, p.mode, d, fl), tri = T.diatonic(p.key, p.mode, d, 'triad');
-    const role = tri.q === 'aug' ? 'Strange and dreamy. It adds a mysterious touch.' : (ROLE[tri.numeral.replace(/[♭♯]/g, '')] || 'A chord from your key.');
+    const role = ROLE[tri.numeral.replace(/[♭♯]/g, '')] || 'A chord from your key.';
     return { root: c.root, q: c.q, degree: d, role, home: d === 0, borrowed: false };
   });
   let b;
@@ -110,78 +157,143 @@ function buildPadChords() {
   return out;
 }
 const padKey = i => (S.pads[i] ? ckey(S.pads[i].root, S.pads[i].q) : '');
+/* The pad that best matches a chord: same chord, else same root and major/minor family, else same root */
+function matchPad(root, q) {
+  const minorish = T.MINORISH_Q.has(q);
+  let i = S.pads.findIndex(c => c.root === root && c.q === q);
+  if (i < 0) i = S.pads.findIndex(c => c.root === root && T.MINORISH_Q.has(c.q) === minorish);
+  if (i < 0) i = S.pads.findIndex(c => c.root === root);
+  return i;
+}
+/* Pads used by the "try this" idea and the hands-on tour: vi–IV–I–V (major) or i–VI–III–VII (minor) */
+const tryPads = () => (T.isMinorish(BB.store.p.mode) ? [0, 5, 2, 6] : [5, 3, 0, 4]);
 
 /* ================= playing pads ================= */
 function press(source, i) {
   const c = S.pads[i]; if (!c) return;
   S.held = { source, pad: i };
   S.lastPad = i; S.lastPlayed = { root: c.root, q: c.q };
-  TR.chordOn(c.root, c.q, { style: BB.state.chordStyle });
+  TR.chordOn(c.root, c.q); // plays in the scene's rhythm while the music runs (TR.liveRhythm)
   paintNext();
-  if (S.sel != null && !(TR.rec && TR.playing)) placeAt(S.sel, c.root, c.q, false);
+  if (S.sel != null && !(TR.rec && TR.playing)) placeChord(c.root, c.q, false);
 }
 function release(source) {
   if (!S.held || S.held.source !== source) return;
   S.held = null;
   TR.chordOff();
 }
+function hear(slot) {
+  const b = boxInfo(curClip(), slot);
+  if (b.kind === 'chord') BB.preview.chord(b.r, b.q);
+}
 
-/* ================= writing into the lane ================= */
-/* While the transport plays loops, make sure the chords you write are heard. */
-function heard(scene) {
-  if (TR.playing && TR.mode === 'loop' && !TR.isLaunched('chords', scene) && TR.queuedFor('chords') !== scene) TR.launchClip('chords', scene);
+/* ================= editing the progression ================= */
+/* In loop mode, make sure the scene's chords are launched so what you write is what you hear. */
+function heard(track, scene) {
+  if (TR.mode === 'loop' && !TR.isLaunched(track, scene) && TR.queuedFor(track) !== scene) TR.launchClip(track, scene);
 }
-function placeAt(slot, root, q, audition) {
-  const scene = BB.state.scene, had = !!curClip();
-  BB.store.change('Write chord', () => {
-    const c = BB.store.ensureClip('chords', scene, { bars: S.pendingBars, style: BB.state.chordStyle });
-    if (slot < c.slots.length) c.slots[slot] = { r: root, q };
-  }, { info: { track: 'chords', scene } });
-  if (!had) heard(scene);
+/* Write one box (the selected one). value: {r,q} | {rest:true} | null (same as before). One undo step. */
+function writeBox(value, label) {
+  const scene = BB.state.scene, slot = S.sel, g = boxSize(), had = !!curClip();
+  if (slot == null || (!had && value === null)) return false;
+  const rhythm = BB.clone(TR.liveRhythm());
+  BB.store.change(label, () => {
+    const c = BB.store.ensureClip('chords', scene, { bars: S.pendingBars, rhythm });
+    if (slot < c.slots.length) BB.setChordCell(c, slot, g, value);
+  }, info(scene));
+  if (!had) heard('chords', scene);
+  S.starter = '';
+  return true;
+}
+function placeChord(root, q, audition) {
+  const slot = S.sel;
+  if (!writeBox({ r: root, q }, 'Write chord')) return;
   if (audition) BB.preview.chord(root, q);
-  S.starter = ''; S.fresh = slot;
-  flashFresh();
-  advance(slot);
+  S.fresh = slot; flashFresh();
+  advance();
 }
-function advance(slot) {
-  const next = (Math.floor(slot / 4) + 1) * 4;
-  if (next >= slotCount()) { setSel(null); UI.toast('That was the last bar. Press Play to hear your progression!', { replace: 'cp-hint' }); }
+function advance() {
+  const next = S.sel + boxSize();
+  if (next >= slotCount()) { setSel(null); UI.toast('That was the last box. Press Play to hear your progression!', { replace: 'cp-hint' }); }
   else setSel(next);
 }
-function eraseSel() {
+function sameAsBefore() {
   if (S.sel == null) return;
-  const slot = S.sel, scene = BB.state.scene, c = curClip();
-  if (!c || !c.slots[slot]) { UI.toast(slot === 0 || !c ? 'This beat is already empty.' : 'Nothing starts on this beat. The chord before it just keeps playing.', { replace: 'cp-hint' }); return; }
-  BB.store.change('Erase chord', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.slots[slot] = null; }, { info: { track: 'chords', scene } });
-  S.starter = '';
+  if (S.sel === 0) { UI.toast('The first box has nothing before it. Pick a chord or a rest instead.', { replace: 'cp-hint' }); return; }
+  const b = boxInfo(curClip(), S.sel);
+  if (!b.start) { UI.toast('This box already continues the chord before it.', { replace: 'cp-hint' }); return; }
+  if (writeBox(null, 'Same as before')) { S.fresh = S.sel; flashFresh(); hear(S.sel); }
 }
-function restSel() {
+function restBox() {
   if (S.sel == null) return;
-  const slot = S.sel, scene = BB.state.scene;
-  BB.store.change('Add rest', () => {
-    const c = BB.store.ensureClip('chords', scene, { bars: S.pendingBars, style: BB.state.chordStyle });
-    if (slot < c.slots.length) c.slots[slot] = { rest: true };
-  }, { info: { track: 'chords', scene } });
-  S.starter = '';
-  advance(slot);
+  if (writeBox({ rest: true }, 'Add rest')) advance();
+}
+function copyBox() {
+  if (S.sel == null) return;
+  const b = boxInfo(curClip(), S.sel);
+  if (b.kind === 'empty') { UI.toast('This box is empty, so there is nothing to copy.', { replace: 'cp-hint' }); return; }
+  S.clipboard = b.kind === 'rest' ? { rest: true } : { r: b.r, q: b.q };
+  UI.toast('Copied ' + (b.kind === 'rest' ? 'a rest' : T.chordName(b.r, b.q)) + '. Pick another box and press Paste.', { replace: 'cp-hint' });
+  paintToolbar();
+}
+function pasteBox() {
+  if (S.sel == null) return;
+  if (!S.clipboard) { UI.toast('Copy a box first, then paste it here.', { replace: 'cp-hint' }); return; }
+  const v = BB.clone(S.clipboard), slot = S.sel;
+  if (!writeBox(v, 'Paste chord')) return;
+  if (!v.rest) BB.preview.chord(v.r, v.q);
+  S.fresh = slot; flashFresh();
+  advance();
+}
+function boxFlavor(fl) {
+  const c = curClip(), scene = BB.state.scene;
+  if (S.sel == null || !c) return;
+  const ch = BB.chordAt(c, S.sel * 4);
+  if (!ch) { UI.toast('Pick a box with a chord in it first.', { replace: 'cp-hint' }); return; }
+  const q = flavorQ(ch.root, baseOf(ch.root, ch.q), fl);
+  if (q === ch.q) return;
+  BB.store.change('Chord flavor', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.slots[ch.slot] = { r: ch.root, q }; }, info(scene));
+  BB.preview.chord(ch.root, q);
 }
 function clearClip() {
   const c = curClip(), scene = BB.state.scene;
   if (!c || BB.clipIsEmpty('chords', c)) { UI.toast('There are no chords to clear in this scene yet.', { replace: 'cp-hint' }); return; }
-  BB.store.change('Clear chords', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.slots = cc.slots.map(() => null); }, { info: { track: 'chords', scene } });
+  BB.store.change('Clear chords', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.slots = cc.slots.map(() => null); }, info(scene));
   S.starter = ''; setSel(null);
-  UI.toast('Chords cleared.', { action: { label: 'Undo', onClick: () => { const l = BB.store.undo(); if (l) UI.toast('Undid: ' + l); } } });
+  undoToast('Chords cleared.');
+}
+function undoToast(text) {
+  UI.toast(text, { replace: 'cp-undo', ms: 4000, action: { label: 'Undo', onClick: () => { const l = BB.store.undo(); if (l) UI.toast('Undid: ' + l); } } });
 }
 function setBars(bars) {
   const c = curClip(), scene = BB.state.scene;
-  if (!c) { S.pendingBars = bars; buildLane(); paintSel(); return; }
+  if (!c) { S.pendingBars = bars; buildLane(); return; }
   if (c.bars === bars) return;
-  BB.store.change('Chord loop length', () => { const cc = BB.store.clip('chords', scene); if (cc) BB.resizeClip('chords', cc, bars); }, { info: { track: 'chords', scene } });
+  BB.store.change('Chord loop length', () => { const cc = BB.store.clip('chords', scene); if (cc) BB.resizeClip('chords', cc, bars); }, info(scene));
 }
-function setStyle(id) {
-  BB.setState({ chordStyle: id });
+function doubleIt() {
   const c = curClip(), scene = BB.state.scene;
-  if (c && c.style !== id) BB.store.change('Chord style', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.style = id; }, { group: 'chord-style', info: { track: 'chords', scene } });
+  if (!c || BB.clipIsEmpty('chords', c)) { UI.toast('Write a few chords first, then double them.', { replace: 'cp-hint' }); return; }
+  if (c.bars >= 8) { UI.toast('This progression is already 8 bars, the longest a loop can be.', { replace: 'cp-hint' }); return; }
+  const bars = c.bars * 2;
+  BB.store.change('Double progression', () => { const cc = BB.store.clip('chords', scene); if (cc) BB.resizeClip('chords', cc, bars); }, info(scene));
+  undoToast('Doubled to ' + bars + ' bars. Try changing a chord or two in the second half.');
+}
+function transpose(dir) {
+  const c = curClip(), scene = BB.state.scene, p = BB.store.p;
+  if (!c || BB.clipIsEmpty('chords', c)) { UI.toast('There are no chords to move yet.', { replace: 'cp-hint' }); return; }
+  BB.store.change(dir > 0 ? 'Move chords up' : 'Move chords down', () => {
+    const cc = BB.store.clip('chords', scene); if (!cc) return;
+    cc.slots = cc.slots.map(s => {
+      if (!s || s.rest) return s;
+      const d = T.nearestDegree(s.r, p.key, p.mode), fl = FLAVOR_OF[s.q] || 'triad';
+      const n = T.diatonic(p.key, p.mode, (d + dir + 7) % 7, fl);
+      return { r: n.root, q: n.q };
+    });
+  }, info(scene));
+  const first = BB.store.clip('chords', scene).slots.find(s => s && !s.rest);
+  if (first) BB.preview.chord(first.r, first.q);
+  UI.toast('Moved every chord one step ' + (dir > 0 ? 'up' : 'down') + ' the scale.', { replace: 'cp-hint' });
 }
 function starterOptions() {
   const p = BB.store.p, progs = BB.library.progressions();
@@ -193,12 +305,49 @@ function starterOptions() {
 }
 function applyStarter(id) {
   if (!id) { S.starter = ''; E.starter.update(); return; }
-  const scene = BB.state.scene, c0 = curClip();
-  const clip = BB.library.apply('chords', scene, id, { style: c0 ? c0.style : BB.state.chordStyle });
+  const scene = BB.state.scene;
+  const clip = BB.library.apply('chords', scene, id, { rhythm: BB.clone(TR.liveRhythm()) });
   S.starter = id; setSel(null); E.starter.update();
-  heard(scene);
+  heard('chords', scene);
   const it = starterOptions().find(o => o.id === id);
   UI.toast('Added ' + (it ? it.label : clip.name) + '. Press Play to hear it.', { replace: 'cp-starter' });
+}
+/* Add a bass line or melody that follows this scene's chords */
+function addFollow(track) {
+  const c = curClip(), scene = BB.state.scene;
+  if (!c || BB.clipIsEmpty('chords', c)) { UI.toast('Write some chords first, then add a part that follows them.', { replace: 'cp-hint' }); return; }
+  const list = track === 'bass' ? BASS_FOLLOW : MEL_FOLLOW, id = track === 'bass' ? S.bassFollow : S.melFollow;
+  const it = list.find(x => x.id === id) || list[0];
+  BB.library.apply(track, scene, it.id, { bars: c.bars });
+  heard(track, scene);
+  undoToast('Added a “' + it.label + '” ' + (track === 'bass' ? 'bass line' : 'melody') + ' that follows your chords.');
+}
+
+/* ================= rhythm ================= */
+/* Edit the rhythm of the scene's chord clip, or the pads' rhythm if there's no clip yet */
+function setRhythm(label, mutate, group) {
+  const scene = BB.state.scene, c = curClip();
+  if (c) {
+    BB.store.change(label, () => { const cc = BB.store.clip('chords', scene); if (!cc) return; const r = BB.clone(BB.chordRhythm(cc)); mutate(r); cc.rhythm = r; }, Object.assign({ group }, info(scene)));
+  } else {
+    const r = BB.clone(TR.liveRhythm()); mutate(r); BB.setState({ chordRhythm: r });
+  }
+}
+function pickPreset(id) {
+  const pr = BB.CHORD_RHYTHMS.find(x => x.id === id); if (!pr) return;
+  setRhythm('Chord rhythm', r => { r.hits = pr.hits.slice(); });
+  paintRhythm();
+}
+const hitVal = i => (i % 4 === 0 ? 1 : 0.8);
+function paintRhythm() {
+  const r = TR.liveRhythm(), pid = BB.rhythmPresetId(r), n = BB.rhythmCount(r), c = curClip();
+  E.presetBtns.forEach((b, i) => b.setAttribute('aria-pressed', String(BB.CHORD_RHYTHMS[i].id === pid)));
+  E.rCustom.hidden = pid !== 'custom';
+  E.cells.forEach((el, i) => { const on = r.hits[i] > 0; el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on)); });
+  E.rCount.textContent = n === 0 ? 'Hold: each chord plays once when it starts' : n + (n === 1 ? ' strike' : ' strikes') + ' per bar';
+  E.rNote.textContent = c ? 'Rhythms play in time while the music runs. Every new chord also strikes when it starts.'
+    : 'No chords in this scene yet: this sets how the pads play while the music runs, and is saved with your first chord.';
+  E.feel.update(); E.len.update();
 }
 
 /* ================= painting ================= */
@@ -214,7 +363,7 @@ function paintPads() {
     const nx = nextFor(i).map(j => T.chordName(S.pads[j].root, S.pads[j].q));
     el.setAttribute('aria-label', 'Pad ' + (i + 1) + ': ' + fullName(c.root, c.q) + ', the ' + num + ' chord' + (c.borrowed ? ' (borrowed)' : ''));
     el.setAttribute('data-tip-title', fullName(c.root, c.q) + ' · ' + num + (c.borrowed ? ' · Borrowed' : ''));
-    el.setAttribute('data-tip', c.role + ' Hold to play it (key ' + (i + 1) + '). Good next: ' + orList(nx) + '.');
+    el.setAttribute('data-tip', c.role + ' Hold to play it (key ' + (i + 1) + ' on the number row or number pad). Good next: ' + orList(nx) + '.');
   });
   paintNext(); paintLit(); paintCur();
 }
@@ -223,104 +372,124 @@ function paintNext() {
   E.padEls.forEach((el, i) => el.classList.toggle('next', nx.includes(i)));
 }
 function paintLit() { E.padEls.forEach((el, i) => el.classList.toggle('lit', !!S.lit && padKey(i) === S.lit)); }
-/* The pad that best matches a chord: same chord, else same root and major/minor family, else same root */
-function matchPad(root, q) {
-  const minorish = T.MINORISH_Q.has(q);
-  let i = S.pads.findIndex(c => c.root === root && c.q === q);
-  if (i < 0) i = S.pads.findIndex(c => c.root === root && T.MINORISH_Q.has(c.q) === minorish);
-  if (i < 0) i = S.pads.findIndex(c => c.root === root);
-  return i;
-}
 function paintCur() {
   let i = -1;
   if (S.cur) { const [r, q] = S.cur.split(':'); i = matchPad(+r, q); }
   E.padEls.forEach((el, j) => el.classList.toggle('cur', j === i));
 }
 
-/* The lane: one column per beat, grouped by bar, with each chord drawn as a block over its beats */
+/* The lane: one box per bar / half bar / beat, grouped by bar */
 function buildLane() {
-  const c = curClip(), n = c ? c.slots.length : S.pendingBars * 4, bars = n / 4, lane = E.lane;
-  const col = s => Math.floor(s / 4) * 5 + (s % 4) + 1; // a thin spacer column sits between bars
-  const cols = [];
-  for (let b = 0; b < bars; b++) { cols.push('repeat(4, minmax(var(--cp-bw), 1fr))'); if (b < bars - 1) cols.push('var(--cp-bgap)'); }
+  const c = curClip(), n = c ? c.slots.length : S.pendingBars * 4, bars = n / 4, g = boxSize(), per = 4 / g;
+  const lane = E.lane;
   lane.textContent = '';
-  lane.style.gridTemplateColumns = cols.join(' ');
-  lane.dataset.bars = bars;
+  lane.dataset.g = g;
+  E.boxEls = []; E.boxBySlot = {};
   for (let b = 0; b < bars; b++) {
-    lane.append(h('span', { class: 'cp-barlbl', style: { gridColumn: col(b * 4) + ' / span 4' } }, 'Bar ' + (b + 1)));
-    lane.append(h('span', { class: 'cp-rail', style: { gridColumn: col(b * 4) + ' / span 4' } }));
-  }
-  E.blockAt = new Array(n).fill(null);
-  const info = new Array(n).fill(null);
-  if (c) {
-    for (let i = 0; i < n; i++) {
-      const s = c.slots[i]; if (!s) continue;
-      let j = i + 1; while (j < n && !c.slots[j]) j++;
-      let blk;
-      if (s.rest) blk = h('span', 'cp-block rest', h('span', 'cp-bname', 'Rest'));
-      else {
-        const nm = h('span', 'cp-bname'); chordLabel(nm, s.r, s.q);
-        const inKey = T.chordPcs(s.r, s.q).every(pc => T.inScale(pc, BB.store.p.key, BB.store.p.mode));
-        blk = h('span', 'cp-block' + (inKey ? '' : ' outside'), nm, h('span', 'cp-bnum', numeralOf(s.r, s.q)));
+    const row = h('div', 'cp-boxes');
+    const bar = h('div', 'cp-bar', h('span', 'cp-barlbl', 'Bar ' + (b + 1)), row);
+    bar.style.setProperty('--per', per);
+    for (let k = 0; k < per; k++) {
+      const s = b * 4 + k * g, bi = boxInfo(c, s), where = boxLabel(s, g);
+      let cls = 'cp-box ' + bi.kind + (bi.start ? ' start' : bi.kind !== 'empty' ? ' cont' : '');
+      if (k === 0) cls += ' first';
+      const kids = [];
+      let what;
+      if (bi.kind === 'chord' && bi.start) {
+        const nm = h('span', 'cp-bx-name'); chordLabel(nm, bi.r, bi.q);
+        const inKey = T.chordPcs(bi.r, bi.q).every(pc => T.inScale(pc, BB.store.p.key, BB.store.p.mode));
+        if (!inKey) cls += ' outside';
+        kids.push(nm, h('span', 'cp-bx-num', numeralOf(bi.r, bi.q)));
+        what = fullName(bi.r, bi.q) + ', the ' + numeralOf(bi.r, bi.q) + ' chord.';
+      } else if (bi.kind === 'chord') {
+        const nm = h('span', 'cp-bx-name'); chordLabel(nm, bi.r, bi.q);
+        kids.push(h('span', 'cp-bx-cont', h('span', { class: 'cp-bx-arrow', 'aria-hidden': 'true' }, '↳'), nm), h('span', 'cp-bx-num', 'same'));
+        what = fullName(bi.r, bi.q) + ' keeps playing from the box before.';
+      } else if (bi.kind === 'rest') {
+        kids.push(h('span', 'cp-bx-rest', bi.start ? 'Rest' : '↳ rest'));
+        what = bi.start ? 'A rest: silence until the next chord.' : 'Silence (the rest before keeps going).';
+      } else {
+        kids.push(h('span', { class: 'cp-bx-plus', 'aria-hidden': 'true' }, '+'));
+        what = 'Empty.';
       }
-      blk.style.gridColumn = col(i) + ' / ' + (col(j - 1) + 1);
-      blk.dataset.span = j - i;
-      for (let k = i; k < j; k++) { E.blockAt[k] = blk; info[k] = { start: k === i, s }; }
-      lane.append(blk);
+      if (g < 4) kids.push(h('span', 'cp-bx-beat', g === 2 ? 'beat ' + (s % 4 + 1) : String(s % 4 + 1)));
+      const box = h('button', {
+        class: cls, 'aria-pressed': 'false', 'aria-label': where + ': ' + what, dataset: { slot: String(s) },
+        'data-tip-title': where, 'data-tip': what + ' Tap to pick this box and hear it, then tap a chord pad to put a chord here.',
+      }, kids);
+      row.append(box);
+      E.boxEls.push(box); E.boxBySlot[s] = box;
     }
+    lane.append(bar);
   }
-  E.beatEls = BB.range(n).map(i => {
-    const inf = info[i], label = 'Bar ' + (Math.floor(i / 4) + 1) + ' · beat ' + (i % 4 + 1);
-    let what;
-    if (!inf) what = 'Empty.';
-    else if (inf.s.rest) what = inf.start ? 'A rest starts here: silence until the next chord.' : 'Silence (a rest).';
-    else what = fullName(inf.s.r, inf.s.q) + (inf.start ? ' starts here.' : ' keeps playing here.');
-    const b = h('button', {
-      class: 'cp-beat' + (i % 4 === 0 ? ' down' : ''), 'aria-label': label + ': ' + what, 'aria-pressed': 'false',
-      'data-tip-title': label, 'data-tip': what + ' Click to pick this beat, then tap a chord pad to write a chord here.',
-      dataset: { i: String(i) }, style: { gridColumn: String(col(i)) },
-    }, h('span', 'cp-bn', String(i % 4 + 1)));
-    lane.append(b);
-    return b;
-  });
-  S.nowSlot = -1; E.nowBlock = null;
+  S.nowBox = -1;
+  /* hint when smaller boxes are forced so that no change is hidden */
+  const need = BB.chordGridNeeded(c);
+  E.gridHint.hidden = !(S.grid > need);
+  if (S.grid > need) E.gridHint.textContent = 'Showing ' + (need === 2 ? 'half bars' : 'single beats') + ' because a chord in this progression changes ' + (need === 2 ? 'halfway through a bar' : 'on a beat inside a bar') + '. Use “Same as before” to join boxes.';
+  E.laneEmpty.hidden = !(BB.clipIsEmpty('chords', c) && S.sel == null);
   paintSel();
 }
 function flashFresh() {
-  const blk = S.fresh != null && E.blockAt[S.fresh];
+  const el = S.fresh != null && E.boxBySlot[S.fresh];
   S.fresh = null;
-  if (!blk) return;
-  blk.classList.remove('fresh'); void blk.offsetWidth; blk.classList.add('fresh');
+  if (!el) return;
+  el.classList.remove('fresh'); void el.offsetWidth; el.classList.add('fresh');
 }
 function paintSel() {
-  const n = slotCount();
-  if (S.sel != null && S.sel >= n) S.sel = null;
+  const n = slotCount(), g = boxSize();
+  if (S.sel != null) { S.sel = Math.floor(S.sel / g) * g; if (S.sel >= n) S.sel = null; }
   const placing = S.sel != null;
-  E.beatEls.forEach((b, i) => { const on = i === S.sel; b.classList.toggle('is-sel', on); b.setAttribute('aria-pressed', String(on)); });
-  E.place.hidden = !placing;
+  E.boxEls.forEach(b => { const on = +b.dataset.slot === S.sel; b.classList.toggle('is-sel', on); b.setAttribute('aria-pressed', String(on)); });
+  E.toolbar.hidden = !placing;
   E.writing.hidden = !placing;
   E.padsWrap.classList.toggle('placing', placing);
-  if (placing) { E.placeWhere.textContent = where(S.sel); E.writingWhere.textContent = where(S.sel); scrollToSlot(S.sel); }
-  E.write.update();
   E.laneEmpty.hidden = placing || !BB.clipIsEmpty('chords', curClip());
+  if (placing) { const w = boxLabel(S.sel, g); E.placeWhere.textContent = w; E.writingWhere.textContent = w.replace(/^Bar/, 'bar'); scrollToBox(S.sel); }
+  E.write.update();
+  paintToolbar();
 }
-function setSel(i) { S.sel = i == null ? null : BB.clamp(i, 0, slotCount() - 1); paintSel(); }
-function scrollToSlot(i) {
-  const b = E.beatEls[i], sc = E.laneScroll; if (!b) return;
+function paintToolbar() {
+  if (S.sel == null) return;
+  const b = boxInfo(curClip(), S.sel);
+  E.same.disabled = S.sel === 0;
+  E.same.classList.toggle('cp-dim', S.sel === 0 || !b.start);
+  E.paste.classList.toggle('cp-dim', !S.clipboard);
+  E.boxFlavor.update();
+  E.boxFlavor.classList.toggle('cp-dim', b.kind !== 'chord');
+  E.placeWhat.textContent = b.kind === 'chord' ? (b.start ? ' holds ' : ' continues ') + T.chordName(b.r, b.q) + '.' : b.kind === 'rest' ? ' is silent.' : ' is empty.';
+}
+function setSel(i, opts = {}) {
+  S.sel = i == null ? null : BB.clamp(i, 0, slotCount() - 1);
+  paintSel();
+  if (S.sel != null && opts.hear) hear(S.sel);
+}
+function scrollToBox(slot) {
+  const b = E.boxBySlot[slot], sc = E.laneScroll; if (!b) return;
   const l = b.offsetLeft, r = l + b.offsetWidth;
   if (l < sc.scrollLeft + 8) sc.scrollLeft = Math.max(0, l - 28);
   else if (r > sc.scrollLeft + sc.clientWidth - 8) sc.scrollLeft = r - sc.clientWidth + 28;
 }
-function paintNow(slot, chordKey) {
-  if (slot !== S.nowSlot) {
-    const old = E.beatEls[S.nowSlot]; if (old) old.classList.remove('now');
-    if (E.nowBlock) E.nowBlock.classList.remove('playing');
-    S.nowSlot = slot;
-    const b = E.beatEls[slot]; if (b) b.classList.add('now');
-    E.nowBlock = E.blockAt[slot] || null;
-    if (E.nowBlock) E.nowBlock.classList.add('playing');
+function paintNow(pos, ch) {
+  const g = boxSize(), box = pos < 0 ? -1 : Math.floor(Math.floor(pos / 4) / g) * g;
+  if (box !== S.nowBox) {
+    const old = E.boxBySlot[S.nowBox]; if (old) old.classList.remove('now');
+    S.nowBox = box;
+    const b = E.boxBySlot[box]; if (b) b.classList.add('now');
   }
-  if (chordKey !== S.cur) { S.cur = chordKey; paintCur(); }
+  const step = pos < 0 ? -1 : pos % 16;
+  if (step !== S.nowStep) {
+    const oc = E.cells[S.nowStep]; if (oc) oc.classList.remove('now', 'strike');
+    S.nowStep = step;
+    const cell = E.cells[step];
+    if (cell) {
+      const r = BB.chordRhythm(curClip());
+      cell.classList.add('now');
+      if (ch && (r.hits[step] > 0 || ch.start === pos)) cell.classList.add('strike');
+    }
+  }
+  const k = ch ? ckey(ch.root, ch.q) : null;
+  if (k !== S.cur) { S.cur = k; paintCur(); }
 }
 
 /* The melody strip: 10 bars from the scale, starting near middle C */
@@ -347,17 +516,19 @@ function buildMel(force) {
 }
 
 function paintHeader() {
-  const p = BB.store.p, sc = p.scenes[BB.state.scene];
+  const p = BB.store.p, sc = p.scenes[BB.state.scene], label = 'Scene ' + (BB.state.scene + 1);
   E.keyPill.textContent = T.pcName(p.key) + ' ' + T.MODES[p.mode].name.toLowerCase();
-  const label = 'Scene ' + (BB.state.scene + 1);
-  E.scenePill.textContent = sc && sc.name && sc.name !== label ? label + ' · ' + sc.name : label;
+  const sname = sc && sc.name && sc.name !== label ? label + ' · ' + sc.name : label;
+  E.scenePill.textContent = sname; E.rScenePill.textContent = sname;
   E.recPill.hidden = !(TR.rec && TR.playing);
+  const scene = BB.state.scene;
+  E.addBass.querySelector('.btn-label').textContent = BB.store.clip('bass', scene) ? 'Replace bass' : 'Add bass';
+  E.addMel.querySelector('.btn-label').textContent = BB.store.clip('melody', scene) ? 'Replace melody' : 'Add melody';
 }
 function ctlSummary() {
   const p = BB.store.p, inst = BB.INSTRUMENTS[p.tracks.chords.inst];
   const fl = FLAVORS.find(f => f.id === (BB.state.chordFlavor || 'triad')) || FLAVORS[0];
-  const c = curClip(), st = BB.CHORD_STYLES.find(x => x.id === ((c && c.style) || BB.state.chordStyle)) || BB.CHORD_STYLES[0];
-  E.ctlsVal.textContent = (inst ? inst.name : 'Sound') + ' · ' + fl.label + ' · ' + st.name;
+  E.ctlsVal.textContent = (inst ? inst.name : 'Sound') + ' · ' + fl.label;
 }
 function openCtls(open) {
   E.padsPanel.classList.toggle('ctls-open', open);
@@ -365,18 +536,24 @@ function openCtls(open) {
 }
 function updateControls() {
   ctlSummary();
-  E.sound.update(); E.flavor.update(); E.style.update(); E.bars.update(); E.melSeg.update(); E.write.update();
+  E.sound.update(); E.flavor.update(); E.bars.update(); E.melSeg.update(); E.write.update(); E.gridSeg.update();
+  const need = BB.chordGridNeeded(curClip());
+  Array.from(E.gridSeg.querySelectorAll('button')).forEach((b, i) => {
+    const o = GRID_OPTS[i], locked = o.id > need;
+    b.classList.toggle('cp-locked', locked);
+    b.setAttribute('aria-disabled', String(locked));
+    b.setAttribute('data-tip', locked ? o.tip + ' Not available right now: some chords change inside a bar, and bigger boxes would hide them.' : o.tip);
+  });
+  E.bassSeg.update(); E.melFollowSeg.update();
   const p = BB.store.p, sig = p.key + ':' + p.mode;
   if (sig !== S.keySig) { S.keySig = sig; E.starter.refill(); } else E.starter.update();
 }
 function refresh(evt) {
   evt = evt || {};
-  const c = curClip();
-  /* the play-style buttons show (and the pads play) the style of the clip you are editing */
-  if (c && c.style && c.style !== BB.state.chordStyle) BB.setState({ chordStyle: c.style });
   paintPads();
   if (!evt.track || evt.track === 'chords' || evt.all) buildLane();
   buildMel(false);
+  paintRhythm();
   paintHeader();
   updateControls();
   flashFresh();
@@ -390,7 +567,6 @@ function mount(el) {
   const scenes = UI.scenePicker({ track: 'chords', key: 'Z' });
   const sceneWrap = h('div', 'cp-scenes', scenes);
   const badge = scenes.querySelector(':scope > .hk'); if (badge) sceneWrap.append(badge); // keep the letter badge outside the scroll box
-  E.scenes = scenes;
   el.append(h('div', 'view-head cp-head',
     h('div', 'cp-titles', h('h2', 'view-title', 'Chords'), h('p', 'view-sub', 'Every pad is in your key, so nothing sounds wrong.')),
     sceneWrap, UI.tourButton('chords')));
@@ -406,13 +582,6 @@ function mount(el) {
       const c = buildPadChords()[S.lastPad != null ? S.lastPad : 0];
       BB.preview.chord(c.root, c.q);
     },
-  });
-  E.style = UI.seg({
-    label: 'Play style', key: 'D', small: true,
-    options: BB.CHORD_STYLES.map(s => ({ id: s.id, label: s.name, tip: s.desc })),
-    tip: 'How the notes of each chord are played: held, strummed, or in a rhythm. Rhythms follow the beat while the music plays. This also sets how the chord loop below plays.',
-    value: () => { const c = curClip(); return (c && c.style) || BB.state.chordStyle || 'hold'; },
-    set: setStyle,
   });
   E.padEls = BB.range(8).map(i => {
     const b = h('button', { class: 'cp-pad', dataset: { i: String(i) } },
@@ -431,32 +600,37 @@ function mount(el) {
     b.addEventListener('contextmenu', e => e.preventDefault());
     return b;
   });
-  E.padsWrap = h('div', { class: 'cp-pads', id: 'cp-pads' }, E.padEls);
+  /* data-no-press-tip: pads are held to play, so a long press on a phone plays instead of showing a tooltip */
+  E.padsWrap = h('div', { class: 'cp-pads', id: 'cp-pads', 'data-no-press-tip': '' }, E.padEls);
   E.keyPill = h('span', { class: 'pill cp-keypill', 'data-tip-title': 'Your key', 'data-tip': 'The pads are built from your song’s key and scale. Change them with Key and Scale at the top; the pads follow.' });
-  E.writing = h('span', { class: 'pill cp-writing', hidden: true, 'data-tip-title': 'Writing chords', 'data-tip': 'Tapping a pad now also writes it into the chord lane below. Press Done (or Esc) to just play again.' },
-    h('span', { class: 'ico', html: I.edit }), 'Tap a pad to write it on ', E.writingWhere = h('b'));
+  E.writing = h('span', { class: 'pill cp-writing', hidden: true, 'data-tip-title': 'Writing chords', 'data-tip': 'Tapping a pad now also writes it into the selected box of the progression. Press Done (or Esc) to just play again.' },
+    h('span', { class: 'ico', html: I.edit }), 'Tap a pad to write it in ', E.writingWhere = h('b'));
   E.ctlsVal = h('span', 'cp-ct-val');
   E.ctlsToggle = h('button', { class: 'btn sm cp-ctls-toggle', 'aria-expanded': 'false', 'aria-controls': 'cp-ctls',
-    'data-tip-title': 'Sound and style', 'data-tip': 'Show or hide the controls for the chord sound, flavor and play style.',
+    'data-tip-title': 'Sound and flavor', 'data-tip': 'Show or hide the controls for the chord sound and flavor.',
     onclick: () => openCtls(!E.padsPanel.classList.contains('ctls-open')) },
-  h('span', 'lbl', 'Sound & style'), E.ctlsVal, h('span', { class: 'cp-ct-chev', 'aria-hidden': 'true' }));
+  h('span', 'lbl', 'Sound & flavor'), E.ctlsVal, h('span', { class: 'cp-ct-chev', 'aria-hidden': 'true' }));
   const padsPanel = E.padsPanel = h('section', { class: 'panel cp-pads-panel c-chords', id: 'cp-pads-panel', 'aria-label': 'Chord pads' },
     h('div', 'panel-head',
       h('h3', null, h('i', 'sw'), 'Chord pads'),
-      h('p', 'hint', 'Hold a pad', h('span', 'desk-only', ' or press 1–8'), '. Outlined pads make a good next chord.'),
+      h('p', 'hint', 'Hold a pad', h('span', 'desk-only', ' or press 1–8 (number row or number pad)'), '. Outlined pads make a good next chord.'),
       h('span', 'grow'), E.writing, E.keyPill),
     E.ctlsToggle,
     h('div', { class: 'cp-ctls', id: 'cp-ctls' },
       h('div', 'cp-ctl', h('span', 'lbl', 'Sound'), E.sound),
-      h('div', 'cp-ctl', h('span', 'lbl', 'Flavor'), E.flavor),
-      h('div', { class: 'cp-ctl', id: 'cp-style' }, h('span', 'lbl', 'Play style'), E.style)),
+      h('div', 'cp-ctl', h('span', 'lbl', 'Flavor'), E.flavor)),
     E.padsWrap);
 
-  /* ---- chord lane panel ---- */
+  /* ---- progression panel ---- */
   E.write = UI.toggle({
     label: 'Write chords', key: 'A', icon: I.edit, cls: 'sm c-chords',
-    tip: 'Turn on, then tap chord pads to write them into the lane, one bar at a time. You can also tap any beat in the lane to start there.',
-    value: () => S.sel != null, set: v => setSel(v ? 0 : null),
+    tip: 'Turn on, then tap chord pads to fill the boxes one after another. You can also tap any box to start there.',
+    value: () => S.sel != null, set: v => setSel(v ? 0 : null, { hear: true }),
+  });
+  E.gridSeg = UI.seg({
+    label: 'Chord changes', small: true, options: GRID_OPTS,
+    tip: 'How often a chord can change: once a bar, every half bar, or on any beat. This sets the size of the boxes below.',
+    value: () => boxSize(), set: id => { S.grid = id; buildLane(); updateControls(); },
   });
   E.bars = UI.seg({
     label: 'Bars', key: 'B', small: true,
@@ -464,42 +638,141 @@ function mount(el) {
     options: BB.BAR_CHOICES.map(b => ({ id: b, label: String(b), tip: b === 1 ? 'A 1-bar loop' : 'A ' + b + '-bar loop' })),
     value: () => { const c = curClip(); return c ? c.bars : S.pendingBars; }, set: setBars,
   });
+  E.double = UI.button({ label: 'Double it', icon: I.copy, cls: 'sm', tip: 'Repeat the progression so it is twice as long (up to 8 bars). Then change a chord or two in the copy for variety.', onClick: doubleIt });
+  E.up = UI.button({ label: 'Move chords up', cls: 'sm icon-only cp-step', text: false, tip: 'Move every chord one step up the scale (C becomes Dm, F becomes G…). A quick way to make a variation.', onClick: () => transpose(1) });
+  E.down = UI.button({ label: 'Move chords down', cls: 'sm icon-only cp-step', text: false, tip: 'Move every chord one step down the scale (Dm becomes C, G becomes F…).', onClick: () => transpose(-1) });
+  E.up.append(h('span', { class: 'cp-step-glyph', 'aria-hidden': 'true' }, '▲')); E.down.append(h('span', { class: 'cp-step-glyph', 'aria-hidden': 'true' }, '▼'));
   E.starter = UI.select({
     label: 'Starter progressions', key: 'G', small: true, options: starterOptions,
     tip: 'Start from a famous chord progression in your key. It replaces this scene’s chords (Undo brings them back).',
     value: () => S.starter, set: applyStarter,
   });
   E.starter.classList.add('cp-starter');
-  E.clear = UI.button({ label: 'Clear', key: 'C', icon: I.trash, cls: 'sm ghost', tip: 'Remove every chord from this scene’s chord loop. You can undo it.', onClick: clearClip });
-  E.rest = UI.button({ label: 'Rest', key: 'H', cls: 'sm', tip: 'Put a rest (silence) on the picked beat, so the chords pause there.', onClick: restSel });
-  E.erase = UI.button({ label: 'Erase', key: 'X', icon: I.trash, cls: 'sm', tip: 'Remove the chord that starts on the picked beat. The chord before it keeps playing instead. Shortcut: Delete.', onClick: eraseSel });
+  E.clear = UI.button({ label: 'Clear', key: 'C', icon: I.trash, cls: 'sm ghost', tip: 'Remove every chord from this scene’s progression. You can undo it.', onClick: clearClip });
+
+  /* toolbar for the selected box */
+  E.same = UI.button({ label: 'Same as before', key: 'X', cls: 'sm', tip: 'Let the chord on the left keep playing through this box, as if you never changed it. Nothing else moves. Shortcut: Delete.', onClick: sameAsBefore });
+  E.rest = UI.button({ label: 'Rest', key: 'H', cls: 'sm', tip: 'Silence in this box: the chords pause here.', onClick: restBox });
+  E.boxFlavor = UI.seg({
+    label: 'This chord’s flavor', small: true, options: BOX_FLAVORS,
+    tip: 'Change the color of just the chord in this box. The note it is built on stays the same.',
+    value: () => { const b = boxInfo(curClip(), S.sel == null ? 0 : S.sel); return b.kind === 'chord' ? FLAVOR_OF[b.q] || '' : ''; },
+    set: boxFlavor,
+  });
+  E.copy = UI.button({ label: 'Copy', icon: I.copy, cls: 'sm ghost', tip: 'Copy the chord in this box, to paste it into another box.', onClick: copyBox });
+  E.paste = UI.button({ label: 'Paste', cls: 'sm ghost', tip: 'Put the copied chord into this box, then move on to the next box.', onClick: pasteBox });
   E.done = UI.button({ label: 'Done', cls: 'sm primary', tip: 'Stop writing. The pads go back to just playing. Shortcut: Esc.', onClick: () => setSel(null) });
-  E.place = h('div', { class: 'cp-place', hidden: true, role: 'status' },
-    h('span', { class: 'cp-place-ico', html: I.edit }),
-    h('span', 'cp-place-text', 'Writing on ', E.placeWhere = h('b'), '. Tap a chord pad to put it there.',
-      h('span', 'desk-only cp-place-keys', ' Enter writes the last chord you played, ← → move, Esc stops.')),
-    h('span', 'cp-place-btns', E.rest, E.erase, E.done));
+  E.toolbar = h('div', { class: 'cp-place', hidden: true, role: 'status' },
+    h('div', 'cp-place-line',
+      h('span', { class: 'cp-place-ico', html: I.edit }),
+      h('span', 'cp-place-text', h('b', null, E.placeWhere = h('span')), E.placeWhat = h('span'), ' Tap a chord pad to put a chord here.',
+        h('span', 'desk-only cp-place-keys', ' ← → move, Enter writes the last chord, Esc stops.'))),
+    h('div', 'cp-place-btns',
+      E.same, E.rest, E.copy, E.paste,
+      h('span', 'cp-place-flavor', h('span', 'lbl', 'Flavor'), E.boxFlavor),
+      h('span', 'grow'), E.done));
+
   E.lane = h('div', { class: 'cp-lane', id: 'cp-lane' });
   E.laneScroll = h('div', 'cp-lane-scroll', E.lane);
-  E.laneEmpty = h('p', { class: 'cp-lane-empty' }, 'No chords here yet. Tap a beat, then tap a pad. Or pick a starter.');
+  E.laneEmpty = h('p', { class: 'cp-lane-empty' }, 'No chords here yet. Tap the first box, then tap pads. Or pick a starter.');
+  E.gridHint = h('p', { class: 'hint cp-grid-hint', hidden: true });
   E.lane.addEventListener('click', e => {
-    const b = e.target.closest('.cp-beat'); if (!b) return;
-    const i = +b.dataset.i;
-    setSel(S.sel === i ? null : i);
+    const b = e.target.closest('.cp-box'); if (!b) return;
+    setSel(+b.dataset.slot, { hear: true });
   });
-  E.scenePill = h('span', { class: 'pill', 'data-tip-title': 'Scene', 'data-tip': 'This lane edits the chords of the scene you picked at the top. Each scene can have its own progression.' });
-  E.recPill = h('span', { class: 'pill cp-recpill', hidden: true, 'data-tip-title': 'Recording', 'data-tip': 'Record is on: the chords you play land in this lane in time with the beat. Undo removes a take.' }, h('i', 'cp-recdot'), 'Recording');
-  const lanePanel = h('section', { class: 'panel cp-lane-panel c-chords', id: 'cp-lane-panel', 'aria-label': 'Chord progression' },
+  E.scenePill = h('span', { class: 'pill', 'data-tip-title': 'Scene', 'data-tip': 'This progression belongs to the scene you picked at the top. Each scene can have its own chords.' });
+  E.recPill = h('span', { class: 'pill cp-recpill', hidden: true, 'data-tip-title': 'Recording', 'data-tip': 'Record is on: the chords you play land in the progression in time with the beat. Undo removes a take.' }, h('i', 'cp-recdot'), 'Recording');
+
+  /* follow helpers */
+  E.bassSeg = UI.seg({ label: 'Bass style', small: true, options: BASS_FOLLOW.map(o => ({ id: o.id, label: o.label, tip: (BB.library.itemsFor('bass').find(x => x.id === o.id) || {}).desc })), value: () => S.bassFollow, set: id => { S.bassFollow = id; } });
+  E.melFollowSeg = UI.seg({ label: 'Melody style', small: true, options: MEL_FOLLOW.map(o => ({ id: o.id, label: o.label, tip: (BB.library.itemsFor('melody').find(x => x.id === o.id) || {}).desc })), value: () => S.melFollow, set: id => { S.melFollow = id; } });
+  E.addBass = UI.button({ label: 'Add bass', icon: I.plus, cls: 'sm c-bass colored', tip: 'Adds a bass line to this scene that follows your chords, note for note. Change the chords later and add it again to match.', onClick: () => addFollow('bass') });
+  E.addMel = UI.button({ label: 'Add melody', icon: I.plus, cls: 'sm c-melody colored', tip: 'Adds a melody to this scene built on your chords, so it always fits. Edit it on the Keys screen.', onClick: () => addFollow('melody') });
+  E.addBass.id = 'cp-add-bass';
+
+  E.toolsToggle = h('button', { class: 'btn sm cp-tools-toggle', 'aria-expanded': 'false', 'aria-controls': 'cp-more',
+    'data-tip-title': 'More tools', 'data-tip': 'Show tools for the whole progression: chord changes, length, double it, move, starters and clear.',
+    onclick: () => { const open = !E.lanePanel.classList.contains('tools-open'); E.lanePanel.classList.toggle('tools-open', open); E.toolsToggle.setAttribute('aria-expanded', String(open)); } },
+  'More tools', h('span', { class: 'cp-ct-chev', 'aria-hidden': 'true' }));
+  const lanePanel = E.lanePanel = h('section', { class: 'panel cp-lane-panel c-chords', id: 'cp-lane-panel', 'aria-label': 'Chord progression' },
     h('div', 'panel-head',
-      h('h3', null, h('i', 'sw'), 'Progression'), E.scenePill, E.recPill, h('span', 'grow'),
-      h('div', 'cp-lane-tools', E.write, h('span', 'cp-bars', h('span', 'lbl', 'Bars'), E.bars), E.starter, E.clear)),
-    E.place,
-    h('div', 'cp-lane-wrap', E.laneScroll, E.laneEmpty),
-    h('p', 'hint cp-lane-hint', 'Each chord lasts until the next one starts. Tap any beat to change what plays there.'));
+      h('h3', null, h('i', 'sw'), 'Progression'), E.scenePill, E.recPill,
+      h('p', 'hint', 'The chords this scene loops, box by box.'), h('span', 'grow')),
+    h('div', 'cp-lane-tools',
+      E.write, E.toolsToggle,
+      h('span', { class: 'cp-more', id: 'cp-more' },
+        h('span', 'cp-tool', h('span', 'lbl', 'Changes'), E.gridSeg),
+        h('span', 'cp-tool', h('span', 'lbl', 'Bars'), E.bars),
+        E.double,
+        h('span', 'cp-tool', h('span', 'lbl', 'Move'), E.up, E.down),
+        E.starter, E.clear)),
+    E.toolbar,
+    E.laneEmpty,
+    h('div', 'cp-lane-wrap', E.laneScroll),
+    E.gridHint,
+    h('div', { class: 'cp-follow', id: 'cp-follow' },
+      h('span', { class: 'lbl cp-follow-lbl', 'data-tip-title': 'Follow these chords', 'data-tip': 'One tap adds a bass line or melody that is built from this progression, so it always fits.' }, 'Follow these chords'),
+      h('span', 'cp-follow-item c-bass', h('span', 'cp-follow-name', 'Bass'), E.bassSeg, E.addBass),
+      h('span', 'cp-follow-item c-melody', h('span', 'cp-follow-name', 'Melody'), E.melFollowSeg, E.addMel)));
+
+  /* ---- rhythm panel ---- */
+  E.presets = h('div', { class: 'cp-presets', id: 'cp-presets', role: 'group', 'aria-label': 'Strikes per bar', 'data-tip-title': 'Strikes per bar', 'data-tip': 'How many times each chord is played in every bar. Pick one, then press Play to hear it.' });
+  E.presetBtns = BB.CHORD_RHYTHMS.map(r => {
+    const b = h('button', { class: 'cp-preset', 'aria-pressed': 'false', 'data-tip-title': r.name, 'data-tip': r.desc, onclick: () => pickPreset(r.id) },
+      h('span', 'cp-pr-big', r.short), h('span', 'cp-pr-small', PRESET_SMALL[r.id] || r.name));
+    E.presets.append(b); return b;
+  });
+  BB.controls.add(E.presets, {
+    key: 'D', label: 'Strikes per bar',
+    adjust: dir => { const ids = BB.CHORD_RHYTHMS.map(x => x.id), i = ids.indexOf(BB.rhythmPresetId(TR.liveRhythm())); pickPreset(ids[((i < 0 ? 0 : i + dir) + ids.length) % ids.length]); },
+    text: () => { const id = BB.rhythmPresetId(TR.liveRhythm()), r = BB.CHORD_RHYTHMS.find(x => x.id === id); return r ? r.name : 'Custom'; },
+  });
+  E.cells = BB.range(16).map(i => h('button', {
+    class: 'cp-rcell' + (i % 4 === 0 ? ' down' : '') + (Math.floor(i / 4) % 2 ? ' odd' : ''), dataset: { i: String(i) }, 'aria-pressed': 'false',
+    'aria-label': 'Beat ' + (Math.floor(i / 4) + 1) + ', step ' + (i % 4 + 1),
+    'data-tip-title': 'Beat ' + (Math.floor(i / 4) + 1) + (i % 4 ? ', between beats' : ''),
+    'data-tip': 'Tap to add or remove a strike here. Drag across squares to change several at once.',
+  }, h('span', 'cp-rnum', i % 4 === 0 ? String(i / 4 + 1) : '')));
+  E.strip = h('div', { class: 'cp-strip', id: 'cp-strip', 'data-no-press-tip': '' }, E.cells);
+  UI.glide(E.strip, '.cp-rcell', (cell, e) => {
+    const i = +cell.dataset.i, r = TR.liveRhythm();
+    if (!S.paint || (e && e.type === 'pointerdown')) S.paint = { on: !(r.hits[i] > 0), group: 'cp-rhythm-' + Date.now() };
+    const on = S.paint.on;
+    if ((r.hits[i] > 0) === on) return;
+    setRhythm('Chord rhythm', rr => { rr.hits[i] = on ? hitVal(i) : 0; }, S.paint.group);
+    paintRhythm();
+  }, () => {});
+  ['pointerup', 'pointercancel'].forEach(ev => E.strip.addEventListener(ev, () => { S.paint = null; }));
+  E.feel = UI.seg({
+    label: 'Feel', key: 'N', small: true, options: BB.CHORD_FEELS.map(f => ({ id: f.id, label: f.name, tip: f.desc })),
+    tip: 'How the notes of each strike are played: all together, strummed, one at a time (arp) or bouncing.',
+    value: () => TR.liveRhythm().feel || 'block', set: id => { setRhythm('Chord feel', r => { r.feel = id; }); paintRhythm(); },
+  });
+  E.feel.id = 'cp-feel';
+  E.len = UI.seg({
+    label: 'Length', small: true, options: BB.CHORD_LENGTHS.map(f => ({ id: f.id, label: f.name, tip: f.desc })),
+    tip: 'Ring lets each strike sound until the next one. Short makes punchy stabs.',
+    value: () => TR.liveRhythm().len || 'ring', set: id => { setRhythm('Chord length', r => { r.len = id; }); paintRhythm(); },
+  });
+  E.rCount = h('span', 'cp-rcount');
+  E.rCustom = h('span', { class: 'pill cp-custom', hidden: true, 'data-tip-title': 'Custom rhythm', 'data-tip': 'Your own pattern, made by tapping the squares. Pick a preset to start over.' }, 'Custom');
+  E.rNote = h('p', 'hint cp-rnote');
+  E.rScenePill = h('span', { class: 'pill', 'data-tip-title': 'Scene', 'data-tip': 'The rhythm belongs to this scene’s chords.' });
+  const rhythmPanel = h('section', { class: 'panel cp-rhythm-panel c-chords', id: 'cp-rhythm-panel', 'aria-label': 'Chord rhythm' },
+    h('div', 'panel-head',
+      h('h3', null, h('i', 'sw'), 'Rhythm'), h('span', 'cp-rsub', 'how often each chord plays'), E.rScenePill, h('span', 'grow')),
+    h('div', 'cp-rsec', h('span', 'lbl', 'Strikes per bar'), E.presets),
+    h('div', 'cp-rsec',
+      h('div', 'cp-rline', h('span', 'lbl', 'One bar'), E.rCount, E.rCustom),
+      E.strip),
+    h('div', 'cp-rfoot',
+      h('div', 'cp-ctl', h('span', 'lbl', 'Feel'), E.feel),
+      h('div', 'cp-ctl', h('span', 'lbl', 'Length'), E.len)),
+    E.rNote);
 
   /* ---- melody panel ---- */
   E.melSeg = UI.seg({
-    label: 'Melody notes', key: 'N', small: true,
+    label: 'Melody notes', small: true,
     tip: 'How many different notes the strip uses. 5 notes is the easiest: almost anything you play sounds good.',
     options: [
       { id: 'penta', label: '5 notes', tip: 'The pentatonic scale: 5 notes that always sound good together. Hard to go wrong!' },
@@ -508,7 +781,7 @@ function mount(el) {
     value: () => S.melMode,
     set: id => { S.melMode = id; BB.storage.set(STORE_MEL, id); buildMel(true); },
   });
-  E.mel = h('div', { class: 'cp-mel', id: 'cp-mel' });
+  E.mel = h('div', { class: 'cp-mel', id: 'cp-mel', 'data-no-press-tip': '' });
   UI.glide(E.mel, '.cp-mbar', b => TR.noteOn('melody', +b.dataset.midi, 0.85), b => TR.noteOff('melody', +b.dataset.midi));
   const melPanel = h('section', { class: 'panel cp-mel-panel c-melody', id: 'cp-mel-panel', 'aria-label': 'Melody strip' },
     h('div', 'panel-head',
@@ -517,10 +790,7 @@ function mount(el) {
       h('span', 'grow'), E.melSeg),
     E.mel);
 
-  el.append(h('div', 'cp-grid', padsPanel, lanePanel, melPanel));
-
-  /* blur native selects after a choice so number keys and letters reach the pads again */
-  [E.sound, E.starter].forEach(s => s.select.addEventListener('change', () => s.select.blur()));
+  el.append(h('div', 'cp-grid', padsPanel, lanePanel, rhythmPanel, melPanel));
 
   /* ---- events ---- */
   BB.on('chord', d => {
@@ -539,45 +809,25 @@ function mount(el) {
   });
   BB.on('ui', d => {
     if ('scene' in d) { S.sel = null; S.starter = ''; refresh({ all: true }); return; }
-    if ('chordFlavor' in d) { paintPads(); E.flavor.update(); }
-    if ('chordStyle' in d) E.style.update();
-    if ('chordFlavor' in d || 'chordStyle' in d) ctlSummary();
+    if ('chordFlavor' in d) { paintPads(); E.flavor.update(); ctlSummary(); }
+    if ('chordRhythm' in d) paintRhythm();
   });
   BB.on('transport', d => {
     if (d.rec && S.sel != null) setSel(null); // recording writes chords itself; don't write twice
     paintHeader();
   });
 
-  /* Esc leaves "write" mode before it would stop playback */
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape' || BB.state.view !== 'chords' || S.sel == null) return;
-    if ((BB.tutorial && BB.tutorial.active) || document.querySelector('.sheet-wrap') || (BB.controls && BB.controls.sel)) return;
-    const t = e.target; if (t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable)) return;
-    e.preventDefault(); e.stopImmediatePropagation(); setSel(null);
-  });
-  /* Pads and melody bars are played by holding them, so on touch screens a long press should
-     play, not pop up a tooltip. Mouse hover tooltips stay. */
-  window.addEventListener('pointerdown', e => {
-    if (e.pointerType === 'mouse') return;
-    const t = e.target && e.target.closest && e.target.closest('.cp-pad, .cp-mbar');
-    if (!t || !t.hasAttribute('data-tip')) return;
-    const tip = t.getAttribute('data-tip'); t.removeAttribute('data-tip');
-    const back = () => {
-      window.removeEventListener('pointerup', back, true); window.removeEventListener('pointercancel', back, true);
-      if (!t.hasAttribute('data-tip')) t.setAttribute('data-tip', tip);
-    };
-    window.addEventListener('pointerup', back, true); window.addEventListener('pointercancel', back, true);
-  }, true);
-
   refresh({ all: true });
 }
 
 /* ================= keyboard ================= */
+const PAD_CODE = /^(?:Digit|Numpad)([1-8])$/;
 function keydown(e) {
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
   const code = e.code;
-  const d = /^Digit([1-8])$/.exec(code);
+  const d = PAD_CODE.exec(code);
   if (d) { if (!e.repeat) press('k' + code, +d[1] - 1); return true; }
+  if (code === 'Numpad9' || code === 'Numpad0') return false; // still drums
   const mi = MEL_CODES.indexOf(code);
   if (mi >= 0) {
     if (!e.repeat) {
@@ -588,67 +838,99 @@ function keydown(e) {
     }
     return true;
   }
+  if (e.key === 'Escape') { if (S.sel == null) return false; setSel(null); return true; }
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     if (S.sel == null) return false;
-    const n = slotCount(), step = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? 4 : 1);
-    setSel(((S.sel + step) % n + n) % n);
+    const n = slotCount(), g = boxSize(), step = (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? Math.max(4, g) : g);
+    setSel(((S.sel + step) % n + n) % n, { hear: true });
     return true;
   }
   if (e.key === 'Enter') {
     if (S.sel == null) return false;
-    if (S.lastPlayed) placeAt(S.sel, S.lastPlayed.root, S.lastPlayed.q, true);
+    if (S.lastPlayed) placeChord(S.lastPlayed.root, S.lastPlayed.q, true);
     else UI.toast('Play a chord pad first, then press Enter to write it here.', { replace: 'cp-hint' });
     return true;
   }
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (S.sel == null) return false;
-    eraseSel();
+    sameAsBefore();
     return true;
   }
   return false;
 }
 function keyup(e) {
-  if (/^Digit[1-8]$/.test(e.code)) release('k' + e.code);
+  if (PAD_CODE.test(e.code)) release('k' + e.code);
   const m = S.keyMidi[e.code];
   if (m != null) { delete S.keyMidi[e.code]; TR.noteOff('melody', m); }
 }
 
-/* ================= tutorial ================= */
-function tryPads() { return T.isMinorish(BB.store.p.mode) ? [0, 5, 2, 6] : [5, 3, 0, 4]; }
+/* ================= hands-on tutorial ================= */
+const padName = i => { const pads = S.pads.length ? S.pads : buildPadChords(); return T.chordName(pads[i].root, pads[i].q); };
+const chordStarts = () => { const c = curClip(); return c ? c.slots.filter(s => s && !s.rest).length : 0; };
 const tutorial = [
-  { target: '#cp-pads-panel', view: 'chords', title: 'What is a chord?',
-    text: 'A <b>chord</b> is a few notes played together. Chords set the mood of a song, and the melody sits on top. Each pad here plays one chord.' },
-  { target: '#cp-pads', view: 'chords', title: 'You can’t play a wrong chord',
-    text: 'The pads are built from your song’s <b>key</b> and <b>scale</b> (set at the top), so they all fit together. Hold a pad, or press <b>1 to 8</b> on your keyboard. Pad 8 is <b>borrowed</b> from a related key for a spicy twist.' },
-  { target: () => E.padEls[0] && E.padEls[0].querySelector('.cp-num'), view: 'chords', title: 'What the small numbers mean',
-    text: 'The <b>I, ii, IV, V…</b> are roman numerals: each chord’s place in the key. Capitals are major (bright), lowercase are minor (darker). Musicians describe songs this way, like “I–V–vi–IV”.' },
-  { target: '#cp-pads', view: 'chords', title: 'Good next chords',
-    before: () => { if (S.lastPad == null) { S.lastPad = 0; paintNext(); } },
-    text: 'After you play a chord, 2 or 3 pads get a soft <b>outline</b> and say <b>Good next</b>. Those moves sound natural. Follow them or ignore them; nothing here sounds wrong.' },
-  { target: '#cp-style', view: 'chords', title: 'Play styles', before: () => openCtls(true),
-    text: '<b>Hold</b> rings out, <b>Strum</b> rolls like a guitar, and the others play a rhythm in time with the beat (press Play to hear them). <b>Flavor</b> adds color: 7ths sound jazzy, Sus floats, Add9 sparkles.' },
-  { target: '#cp-lane-panel', view: 'chords', title: 'Write a progression',
-    text: 'This lane is the chord loop of the scene you are editing. <b>Tap a beat</b>, then <b>tap pads</b>: each chord is written in and the next bar is picked for you. Press <b>Done</b> (or Esc) to stop, or pick a <b>Starter</b> to begin from a classic.' },
-  { target: '#cp-mel-panel', view: 'chords', title: 'The melody strip',
-    text: 'These bars play the <b>Melody</b> track using only notes from your scale. Slide across them, or press <b>Q to P</b>. Turn on <b>Record</b> at the top to keep what you play.' },
-  { target: '#cp-pads', view: 'chords', title: 'Try this',
-    get text() {
-      const ids = tryPads(), pads = S.pads.length ? S.pads : buildPadChords();
-      const nums = ids.map(i => numeralOf(pads[i].root, pads[i].q)).join('–');
-      return 'Press <b>Play</b>, then hold pads <b>' + ids.map(i => i + 1).join(', ') + '</b> for one bar each. That is ' + nums + ', a progression behind countless hits. Like it? Tap <b>Write chords</b> and play them again to save it.';
-    } },
+  { target: '#cp-pads-panel', view: 'chords', title: 'Let’s build a progression',
+    text: 'A <b>chord</b> is a few notes played together. A <b>progression</b> is a short row of chords that loops, and it sets the mood of your song. These pads are always in your key, so nothing sounds wrong. Steps with a task wait for you to do it; press <b>Skip</b> to just read along.' },
+  { target: '.cp-scenes', view: 'chords', title: 'Pick an empty scene',
+    task: 'Tap a scene without a dot (for example <b>Scene 6</b>).', doneText: 'This scene is empty and ready.',
+    text: 'Scenes are the parts of your song, like a verse or a chorus. Each one has its own chords.',
+    check: () => { const c = BB.store.p.clips.chords[BB.state.scene]; return !c || BB.clipIsEmpty('chords', c); } },
+  { target: '#cp-lane-panel', view: 'chords', title: 'The progression lane',
+    task: 'Tap the <b>first box</b> (bar 1).', doneText: 'Box 1 is picked. You are writing!',
+    text: 'Each box is one bar. The chord in a box plays for that whole bar.',
+    check: () => S.sel === 0 },
+  { target: '#cp-pads', view: 'chords', title: 'Put a chord in it',
+    get task() { const i = tryPads()[0]; return 'Tap pad <b>' + (i + 1) + '</b> (<b>' + padName(i) + '</b>), or press ' + (i + 1) + '.'; },
+    doneText: 'Written into bar 1, and bar 2 is picked next.',
+    text: 'While a box is picked, tapping a pad writes that chord into it, then jumps to the next box.',
+    check: () => { const c = curClip(), pads = S.pads.length ? S.pads : buildPadChords(), s = c && c.slots[0]; return !!(s && !s.rest && s.r === pads[tryPads()[0]].root); } },
+  { target: '#cp-pads', view: 'chords', title: 'Fill the other bars',
+    get task() { const ids = tryPads().slice(1); return 'Now tap pads <b>' + ids.map(i => i + 1).join(', ') + '</b> (' + ids.map(padName).join(', ') + ').'; },
+    doneText: 'Four chords: that is a real progression!',
+    get text() { const ids = tryPads(), pads = S.pads.length ? S.pads : buildPadChords(); return 'This one is ' + ids.map(i => numeralOf(pads[i].root, pads[i].q)).join('–') + ', a progression behind countless hits.'; },
+    check: () => chordStarts() >= 4 },
+  { target: '#playBtn', title: 'Hear it loop',
+    task: 'Press <b>Play</b> (or Space).', doneText: 'Listen: your four chords loop over and over.',
+    text: 'Your progression plays on repeat. Keep it running while you try the next steps.',
+    check: () => BB.transport.playing },
+  { target: '#cp-presets', view: 'chords', title: 'How often each chord plays',
+    task: 'Pick <b>4×</b> to strike every chord on every beat.', doneText: 'Four strikes in every bar.',
+    text: 'Right now each chord plays once and rings. These buttons choose how many times it strikes in a bar. The squares below show the pattern; tap them to make your own.',
+    check: () => BB.rhythmPresetId(TR.liveRhythm()) === 'x4' },
+  { target: '#cp-feel', view: 'chords', title: 'Change the feel',
+    before: () => { S.tour.feel = TR.liveRhythm().feel; },
+    task: 'Try a <b>Feel</b>, like <b>Arp up</b>.', doneText: 'Hear how the same chords sound new?',
+    text: '<b>Feel</b> decides how the notes of each strike are played: together, strummed, or one at a time.',
+    check: () => TR.liveRhythm().feel !== S.tour.feel },
+  { target: '#cp-lane-panel', view: 'chords', title: 'Change one chord',
+    before: () => { const c = curClip(); S.tour.bar3 = c ? JSON.stringify(boxInfo(c, 8)) : ''; },
+    task: 'Tap <b>bar 3</b>, then tap a different pad.', doneText: 'Changed! Only bar 3 changed; every other box stayed the same.',
+    text: 'You can change any box at any time. Tap it to hear it, then tap a pad to replace it.',
+    check: () => { const c = curClip(); return !!c && S.tour.bar3 !== '' && JSON.stringify(boxInfo(c, 8)) !== S.tour.bar3; } },
+  { target: () => (E.toolbar.hidden ? E.lanePanel : E.same), view: 'chords', title: 'Same as before',
+    before: () => { if (curClip()) setSel(8); },
+    task: 'Tap <b>Same as before</b>.', doneText: 'Bar 3 now keeps playing the chord from bar 2.',
+    text: '<b>Same as before</b> lets the chord on the left carry on through the picked box, as if it had never changed. Nothing else moves. Undo works too.',
+    check: () => { const c = curClip(); return !!c && !c.slots[8]; } },
+  { target: '#cp-follow', view: 'chords', title: 'Add a bass line that follows',
+    before: () => { if (S.sel != null) setSel(null); },
+    task: 'Tap <b>Add bass</b>.', doneText: 'A bass line now follows your chords.',
+    text: 'These buttons write a bass line or melody built from your chords, so it always fits.',
+    check: () => !!BB.store.p.clips.bass[BB.state.scene] },
+  { target: '#cp-mel-panel', view: 'chords', title: 'Play a melody on top',
+    text: 'Slide across these bars (or press <b>Q to P</b>) to play a melody. They only hold notes from your scale. <b>Try next:</b> pick <b>Off</b> under Strikes per bar for a reggae feel, or press <b>Double it</b> and change the last two bars.' },
 ];
 
 BB.views.register({
-  id: 'chords', title: 'Chords', letterMode: 'notes',
-  mount, keydown, keyup, tutorial,
+  id: 'chords', title: 'Chords', letterMode: 'notes', numpad: true,
+  mount,
+  keydown, keyup, tutorial,
   render(evt) { refresh(evt); },
   show() { refresh({ all: true }); },
   hide() { S.held = null; S.keyMidi = {}; },
   step(e) {
     const r = e && e.pos && e.pos.chords, on = !!(r && r.scene === BB.state.scene);
     const ch = on ? BB.chordAt(curClip(), r.pos) : null;
-    paintNow(on ? Math.floor(r.pos / 4) : -1, ch ? ckey(ch.root, ch.q) : null);
+    paintNow(on ? r.pos : -1, ch);
   },
 });
 })();
