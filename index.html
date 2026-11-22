@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beat Board</title>
+<meta name="description" content="A beginner-friendly music studio in your browser: drum machine, piano, chord pads, loops, mixer and song arranger.">
+<meta name="theme-color" content="#EBEDF0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#181B20" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Crect x='1' y='1' width='8' height='8' rx='2' fill='%23E35B37'/%3E%3Crect x='11' y='1' width='8' height='8' rx='2' fill='%233657D4'/%3E%3Crect x='1' y='11' width='8' height='8' rx='2' fill='%23D69511'/%3E%3Crect x='11' y='11' width='8' height='8' rx='2' fill='%230E8F7A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<link rel="stylesheet" href="css/views/loops.css">
+<link rel="stylesheet" href="css/views/beat.css">
+<link rel="stylesheet" href="css/views/keys.css">
+<link rel="stylesheet" href="css/views/chords.css">
+<link rel="stylesheet" href="css/views/mixer.css">
+<link rel="stylesheet" href="css/views/song.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar" id="topbar" aria-label="Transport"></header>
+  <nav class="tabs" id="tabs" role="tablist" aria-label="Screens"></nav>
+  <main class="views" id="views"></main>
+</div>
+<div id="hud" aria-hidden="true"></div>
+<noscript><p style="padding:20px">Beat Board needs JavaScript turned on.</p></noscript>
+
+<script src="js/core.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/transport.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/library.js"></script>
+<script src="js/midi.js"></script>
+<script src="js/views/loops.js"></script>
+<script src="js/views/beat.js"></script>
+<script src="js/views/keys.js"></script>
+<script src="js/views/chords.js"></script>
+<script src="js/views/mixer.js"></script>
+<script src="js/views/song.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
