@@ -198,7 +198,7 @@ function onKeyDown(e) {
     if (!C.sel && view && view.keydown && view.keydown(e)) { e.preventDefault(); return; }
     e.preventDefault(); C.move(e.key === 'ArrowDown' ? 1 : -1); return;
   }
-  if (e.key === 'Enter' && C.sel && !/^(BUTTON|A)$/.test(tgt.tagName)) { e.preventDefault(); C.activate(); return; }
+  if (e.key === 'Enter' && C.sel && (tgt === C.sel || !tgt.closest('.ctl') || !/^(BUTTON|A)$/.test(tgt.tagName))) { e.preventDefault(); C.activate(); return; }
   if (e.key === '[' || e.key === ']') {
     e.preventDefault();
     const ids = app.defs.map(d => d.id), i = ids.indexOf(BB.state.view);

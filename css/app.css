@@ -149,7 +149,8 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .pill .sw, .sw { width: 9px; height: 9px; border-radius: 3px; background: var(--c, var(--ink-2)); flex: none; display: inline-block; }
 
 /* scene picker (shared by editors) */
-.scenes { display: flex; gap: 6px; overflow-x: auto; padding: 2px; scrollbar-width: thin; min-width: 0; }
+.scenes { display: flex; gap: 6px; overflow-x: auto; padding: 8px 8px 2px 2px; scrollbar-width: thin; min-width: 0; }
+.scenes > .hk { top: 0; right: 0; }
 .scene-btn { flex: 0 0 auto; display: grid; gap: 1px; min-width: 74px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel); text-align: left; position: relative; }
 .scene-btn:hover { background: var(--well); }
 .scene-btn .num { font-family: var(--font-mono); font-size: 10px; font-weight: 700; color: var(--ink-2); }
@@ -336,6 +337,10 @@ button.list-item:hover { background: var(--well); }
   .sheet.wide { width: 100%; }
   .tour-card { left: 10px; right: 10px; top: auto; bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px)); transform: none; width: auto; }
   #hud { display: none; }
+}
+@media (max-width: 370px) {
+  .topbar .brand { display: none; }
+  .topbar .stepper-unit { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

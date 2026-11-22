@@ -330,11 +330,16 @@ UI.glide = function (container, selector, on, off) {
 UI.toast = function (text, opts = {}) {
   let wrap = BB.$('#toasts');
   if (!wrap) { wrap = h('div', { id: 'toasts', 'aria-live': 'polite' }); document.body.append(wrap); }
+  /* opts.replace: a string id; a newer toast with the same id replaces the older one */
+  if (opts.replace) BB.$$('.toast', wrap).forEach(x => { if (x.dataset.replace === opts.replace) x.remove(); });
   const t = h('div', 'toast', h('span', null, text));
+  if (opts.replace) t.dataset.replace = opts.replace;
   if (opts.action) t.append(h('button', { class: 'toast-act', onclick: () => { opts.action.onClick(); t.remove(); } }, opts.action.label));
   wrap.append(t);
+  while (wrap.children.length > 3) wrap.firstElementChild.remove();
   setTimeout(() => t.classList.add('out'), opts.ms || 2600);
   setTimeout(() => t.remove(), (opts.ms || 2600) + 400);
+  return t;
 };
 BB.on('toast', d => UI.toast(d.text, d));
 
