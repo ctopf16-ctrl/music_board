@@ -412,7 +412,8 @@ document.addEventListener('focusout', () => Tip.hide());
 window.addEventListener('scroll', () => Tip.hide(), true);
 
 /* ================= tutorials =================
-   BB.tutorial.register(id, {title, steps:[{target: selector|fn, title, text, view, placement}]})
+   BB.tutorial.register(id, {title, steps:[{target: selector|fn, title, text, view, task, check, doneText}]})
+   task (html) + check() make a hands-on step: it waits until check() is true, shows a tick, then moves on.
    BB.tutorial.start(id). While a tour runs, ← → step through it and Esc ends it. The page stays usable. */
 const Tour = BB.tutorial = { tours: {}, active: null };
 Tour.register = (id, def) => { Tour.tours[id] = def; };
@@ -447,9 +448,10 @@ Tour.show = function () {
       h('div', 'tour-top', h('span', 'tour-count', `${A.def.title} · ${A.i + 1} of ${n}`), h('button', { class: 'btn ghost icon-only sm', 'aria-label': 'Close tutorial', onclick: Tour.stop }, h('span', { class: 'ico', html: UI.ICONS.close }))),
       h('h3', null, st.title),
       h('p', { html: st.text }),
+      st.task ? h('div', { class: 'tour-task', role: 'status' }, h('span', 'tour-task-mark', ''), h('span', { class: 'tour-task-text', html: st.task })) : null,
       h('div', 'tour-actions',
         A.i > 0 ? h('button', { class: 'btn ghost', onclick: () => Tour.go(-1) }, 'Back') : h('span'),
-        h('button', { class: 'btn primary', onclick: () => Tour.go(1) }, A.i === n - 1 ? 'Done' : 'Next')));
+        h('button', { class: 'btn primary', onclick: () => Tour.go(1) }, A.i === n - 1 ? 'Done' : (st.check ? 'Skip' : 'Next'))));
     card.classList.toggle('floating', !!r && !BB.isMobile());
     if (r && !BB.isMobile()) {
       const cw = card.offsetWidth, chh = card.offsetHeight;
@@ -468,6 +470,20 @@ Tour.show = function () {
       }
     }
     const next = card.querySelector('.btn.primary'); if (next) next.focus({ preventScroll: true });
+    /* interactive step: wait until the user has done the task, then tick it and move on */
+    clearInterval(A.poll);
+    if (st.check) {
+      const stepAt = A.i;
+      const tick = () => {
+        let ok = false; try { ok = !!st.check(); } catch (e) { ok = false; }
+        if (!ok || !Tour.active || Tour.active.i !== stepAt) return;
+        clearInterval(A.poll);
+        card.classList.add('done');
+        const tt = card.querySelector('.tour-task-text'); if (tt && st.doneText) tt.innerHTML = st.doneText;
+        setTimeout(() => { if (Tour.active && Tour.active.i === stepAt) Tour.go(1); }, 900);
+      };
+      A.poll = setInterval(tick, 250);
+    }
   });
 };
 Tour.go = function (d) {
@@ -476,7 +492,7 @@ Tour.go = function (d) {
   if (n >= A.def.steps.length) { const done = A.def.onDone; Tour.stop(); if (done) done(); return; }
   A.i = clamp(n, 0, A.def.steps.length - 1); Tour.show();
 };
-Tour.stop = function () { const A = Tour.active; if (!A) return; A.shade.remove(); A.card.remove(); Tour.active = null; document.body.classList.remove('touring'); };
+Tour.stop = function () { const A = Tour.active; if (!A) return; clearInterval(A.poll); A.shade.remove(); A.card.remove(); Tour.active = null; document.body.classList.remove('touring'); };
 Tour.key = function (e) {
   if (!Tour.active) return false;
   if (e.key === 'Escape') { Tour.stop(); return true; }

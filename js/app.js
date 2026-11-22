@@ -181,6 +181,8 @@ function onKeyDown(e) {
   if (e.altKey) return;
   const code = e.code;
   if (code === 'Space' || code === 'NumpadEnter') { e.preventDefault(); if (!e.repeat) TR.toggle(); return; }
+  /* a screen can claim number-pad keys (Chords uses 1–8 for its pads); anything it doesn't use plays drums */
+  if (NUMPAD[code] && view && view.numpad && view.keydown && view.keydown(e)) { e.preventDefault(); return; }
   if (NUMPAD[code]) { e.preventDefault(); if (!e.repeat) TR.drumHit(NUMPAD[code], e.shiftKey ? 0.5 : 0.95); return; }
   if (code === 'NumpadDecimal') { e.preventDefault(); if (!e.repeat) TR.setRec(!TR.rec); return; }
   if (code === 'NumpadAdd' || code === 'NumpadSubtract') { e.preventDefault(); setBpm(BB.store.p.bpm + (code === 'NumpadAdd' ? 1 : -1) * (e.shiftKey ? 5 : 1)); UI.toast('Tempo ' + BB.store.p.bpm + ' BPM', { ms: 900 }); return; }

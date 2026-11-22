@@ -7,27 +7,31 @@ const BB = window.BB;
 const T = BB.theory;
 
 /* ---------------- playing one step of one track (shared by live + offline) ---------------- */
-function playChordStep(E, p, trackId, clip, pos, t, sd, style) {
+/* Chords strike when they start, plus on every hit of the clip's rhythm (see BB.chordRhythm). */
+function playChordStep(E, p, trackId, clip, pos, t, sd, rhythm) {
   const ch = BB.chordAt(clip, pos);
   if (!ch) return;
-  const inst = p.tracks[trackId].inst, tones = T.voice(ch.root, ch.q), rel = pos - ch.start, span = ch.end - ch.start;
-  style = style || clip.style || 'hold';
-  const v = 0.72;
-  switch (style) {
-    case 'hold': if (rel === 0) tones.forEach(m => E.note(trackId, inst, m, t, v, span * sd * 0.98)); break;
-    case 'strum': if (rel === 0) tones.concat(tones[0] + 12).forEach((m, i) => E.note(trackId, inst, m, t + i * 0.03, v, span * sd * 0.98 - i * 0.03)); break;
-    case 'pulse': if (pos % 2 === 0) tones.forEach(m => E.note(trackId, inst, m, t, pos % 4 ? v * 0.7 : v, sd * 1.6)); break;
-    case 'stabs': if ([0, 3, 6, 10].includes(pos % 16)) tones.forEach(m => E.note(trackId, inst, m, t, v, sd * 1.3)); break;
-    case 'bounce':
-      if (pos % 4 === 0) E.note(trackId, inst, tones[0] - 12, t, v, sd * 1.8);
-      else if (pos % 4 === 2) tones.forEach(m => E.note(trackId, inst, m, t, v * 0.75, sd * 1.4));
-      break;
+  const R = rhythm || BB.chordRhythm(clip), step = pos % 16, rel = pos - ch.start, hv = R.hits[step] || 0;
+  if (rel !== 0 && hv <= 0) return;
+  let nx = pos + 1; while (nx < ch.end && !(R.hits[nx % 16] > 0)) nx++;
+  let steps = nx - pos;
+  if (R.len === 'short') steps = Math.min(steps, 1.25);
+  const dur = Math.max(0.05, steps * sd * 0.97);
+  const inst = p.tracks[trackId].inst, tones = T.voice(ch.root, ch.q);
+  const v = 0.72 * (hv > 0 ? 0.75 + 0.25 * hv : 0.95) * (step % 4 === 0 ? 1 : 0.88);
+  switch (R.feel) {
+    case 'strum': tones.concat(tones[0] + 12).forEach((m, i) => E.note(trackId, inst, m, t + i * 0.03, v, Math.max(0.05, dur - i * 0.03))); break;
     case 'arp': case 'arpdown': {
       let seq = tones.concat(tones.map(m => m + 12));
-      if (style === 'arpdown') seq = seq.reverse();
-      E.note(trackId, inst, seq[rel % seq.length], t, v * 0.85, sd * 1.5); break;
+      if (R.feel === 'arpdown') seq = seq.reverse();
+      let k = 0; for (let s = ch.start; s < pos; s++) if (s === ch.start || R.hits[s % 16] > 0) k++;
+      E.note(trackId, inst, seq[k % seq.length], t, v * 0.9, Math.max(dur, sd * 1.2)); break;
     }
-    default: break;
+    case 'bounce':
+      if (step % 4 === 0) E.note(trackId, inst, tones[0] - 12, t, v, dur);
+      else tones.forEach(m => E.note(trackId, inst, m, t, v * 0.78, dur));
+      break;
+    default: tones.forEach(m => E.note(trackId, inst, m, t, v, dur));
   }
 }
 BB.playChordStep = playChordStep;
@@ -125,10 +129,9 @@ function scheduleStep(abs, t, sd) {
   }
   /* a chord being held live in a rhythmic style */
   const lc = TR.liveChord;
-  if (lc && ['pulse', 'stabs', 'bounce', 'arp', 'arpdown'].includes(lc.style)) {
-    const fake = { slots: [{ r: lc.root, q: lc.q }], bars: 1 };
-    const rel = abs - lc.startAbs;
-    if (rel >= 0) playChordStep(E, p, 'chords', fake, lc.style.startsWith('arp') ? rel : abs % 16, t, sd, lc.style);
+  if (lc && lc.rhythmic && abs > lc.startAbs && lc.R.hits[abs % 16] > 0) {
+    const fake = { slots: [{ r: lc.root, q: lc.q }, null, null, null], bars: 1 };
+    playChordStep(E, p, 'chords', fake, abs % 16, t, sd, lc.R);
   }
   TR._stepAbs = -1;
   return entry;
@@ -360,15 +363,25 @@ TR.noteOff = function (trackId, midi) {
 };
 TR.allNotesOff = function () { Object.keys(TR.held).forEach(k => { const [t, m] = k.split(':'); TR.noteOff(t, +m); }); TR.chordOff(); };
 
-/* Chords played from chord pads. style: one of BB.CHORD_STYLES ids */
+/* The rhythm live chord pads use: the current scene's chords clip, or the last one picked. */
+TR.liveRhythm = function () {
+  const c = BB.store.clip('chords', BB.state.scene);
+  return c ? BB.chordRhythm(c) : (BB.state.chordRhythm || BB.rhythmFromPreset('hold'));
+};
+/* Chords played from chord pads. opts.rhythm overrides the rhythm (see BB.chordRhythm). */
 TR.chordOn = function (root, q, opts = {}) {
   if (!BB.audio.init()) return;
   TR.chordOff();
-  const style = opts.style || BB.state.chordStyle || 'hold';
+  const R = opts.rhythm || (opts.style ? BB.chordRhythm({ style: opts.style }) : TR.liveRhythm());
   const inst = BB.store.p.tracks.chords.inst, tones = T.voice(root, q), now = BB.audio.now + 0.005;
-  const lc = TR.liveChord = { root, q, style, hnds: [], startAbs: TR.playing ? TR.abs : 0, t0: BB.audio.now, rec: null };
-  if (style === 'strum') tones.concat(tones[0] + 12).forEach((m, i) => lc.hnds.push(BB.audio.E.note('chords', inst, m, now + i * 0.03, 0.75)));
-  else if (style === 'hold' || !TR.playing) tones.forEach(m => lc.hnds.push(BB.audio.E.note('chords', inst, m, now, 0.72)));
+  const rhythmic = TR.playing && R.hits.some(x => x > 0);
+  const lc = TR.liveChord = { root, q, R, rhythmic, hnds: [], startAbs: TR.playing ? TR.abs : 0, t0: BB.audio.now, rec: null };
+  const E = BB.audio.E, quick = rhythmic ? stepDur() * (R.len === 'short' ? 1.25 : 3) : null;
+  const play = (m, at, v) => { const hnd = E.note('chords', inst, m, at, v, quick); if (!rhythmic) lc.hnds.push(hnd); };
+  if (R.feel === 'strum') tones.concat(tones[0] + 12).forEach((m, i) => play(m, now + i * 0.03, 0.75));
+  else if ((R.feel === 'arp' || R.feel === 'arpdown') && rhythmic) play(R.feel === 'arp' ? tones[0] : tones[tones.length - 1] + 12, now, 0.7);
+  else if (R.feel === 'bounce') { play(tones[0] - 12, now, 0.72); tones.forEach(m => play(m, now + 0.01, 0.6)); }
+  else tones.forEach(m => play(m, now, 0.72));
   if (recording()) {
     const tg = TR.recTarget('chords');
     if (tg) {

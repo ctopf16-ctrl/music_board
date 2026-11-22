@@ -112,7 +112,7 @@ function buildBass(item, p, scene, bars = 4) {
 
 /* ---------- chords ---------- */
 function buildChords(prog, p, opts = {}) {
-  const c = BB.newClip('chords', { name: prog.name, bars: 4, style: opts.style || 'hold' });
+  const c = BB.newClip('chords', { name: prog.name, bars: 4, style: opts.style || 'hold', rhythm: opts.rhythm });
   prog.degrees.forEach((d, i) => { const ch = T.diatonic(p.key, p.mode, d, prog.flavor); c.slots[i * 4] = { r: ch.root, q: ch.q }; });
   return c;
 }

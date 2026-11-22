@@ -180,6 +180,70 @@ BB.CHORD_STYLES = [
   { id: 'arpdown', name: 'Arp down', desc: 'Plays the chord one note at a time, going down.' },
 ];
 
+/* ---- chord rhythm: how a chords clip strikes ----
+   rhythm = {hits: one bar of 16 steps (0 = no strike, 0.01-1 = strike strength), feel, len}.
+   A chord always strikes when it starts; hits add more strikes while it lasts. */
+const hitsOf = steps => BB.range(16).map(i => (steps.includes(i) ? (i % 4 === 0 ? 1 : 0.8) : 0));
+BB.CHORD_RHYTHMS = [
+  { id: 'hold', name: 'Hold', short: 'Hold', steps: [], desc: 'One strike when the chord changes. It rings until the next chord. Calm and simple.' },
+  { id: 'x1', name: 'Once a bar', short: '1×', steps: [0], desc: 'Strikes on beat 1 of every bar.' },
+  { id: 'x2', name: 'Twice a bar', short: '2×', steps: [0, 8], desc: 'Strikes on beats 1 and 3.' },
+  { id: 'x4', name: 'Every beat', short: '4×', steps: [0, 4, 8, 12], desc: 'Strikes on all 4 beats. A steady piano or guitar feel.' },
+  { id: 'x8', name: 'Every 8th', short: '8×', steps: [0, 2, 4, 6, 8, 10, 12, 14], desc: '8 even strikes per bar. Driving, like pop and rock.' },
+  { id: 'x16', name: 'Every 16th', short: '16×', steps: BB.range(16), desc: '16 fast strikes per bar. Sounds great with Arp.' },
+  { id: 'off', name: 'Off-beats', short: 'Off', steps: [2, 6, 10, 14], desc: 'Strikes between the beats. The reggae and house sound.' },
+  { id: 'push', name: 'Push', short: 'Push', steps: [0, 3, 6, 10], desc: 'Syncopated stabs that push ahead of the beat. Funky.' },
+  { id: 'charleston', name: 'Charleston', short: 'Swing', steps: [0, 6], desc: 'Beat 1, then just before beat 3. A classic swing rhythm.' },
+].map(r => Object.assign(r, { hits: hitsOf(r.steps) }));
+BB.CHORD_FEELS = [
+  { id: 'block', name: 'Together', desc: 'All the chord notes at once.' },
+  { id: 'strum', name: 'Strum', desc: 'Notes roll in quickly from low to high, like a guitar.' },
+  { id: 'arp', name: 'Arp up', desc: 'One note per strike, climbing through the chord. Try it with 8× or 16×.' },
+  { id: 'arpdown', name: 'Arp down', desc: 'One note per strike, falling through the chord.' },
+  { id: 'bounce', name: 'Bounce', desc: 'Low note on each beat, the chord in between. A piano groove.' },
+];
+BB.CHORD_LENGTHS = [
+  { id: 'ring', name: 'Ring', desc: 'Each strike rings until the next one.' },
+  { id: 'short', name: 'Short', desc: 'Each strike is short and punchy.' },
+];
+const LEGACY_RHYTHM = { hold: ['hold', 'block', 'ring'], strum: ['hold', 'strum', 'ring'], pulse: ['x8', 'block', 'short'], stabs: ['push', 'block', 'short'], bounce: ['x8', 'bounce', 'ring'], arp: ['x16', 'arp', 'ring'], arpdown: ['x16', 'arpdown', 'ring'] };
+BB.rhythmFromPreset = function (id, feel = 'block', len = 'ring') {
+  const r = BB.CHORD_RHYTHMS.find(x => x.id === id) || BB.CHORD_RHYTHMS[0];
+  return { hits: r.hits.slice(), feel, len };
+};
+/* The rhythm of a chords clip (older songs only have clip.style; this converts them). */
+BB.chordRhythm = function (clip) {
+  const r = clip && clip.rhythm;
+  if (r && Array.isArray(r.hits) && r.hits.length === 16) return r;
+  const l = LEGACY_RHYTHM[(clip && clip.style) || 'hold'] || LEGACY_RHYTHM.hold;
+  return BB.rhythmFromPreset(l[0], l[1], l[2]);
+};
+/* Which preset a rhythm matches ('custom' if none) and how many strikes per bar it has */
+BB.rhythmPresetId = function (r) {
+  const m = BB.CHORD_RHYTHMS.find(x => x.hits.every((v, i) => (v > 0) === (r.hits[i] > 0)));
+  return m ? m.id : 'custom';
+};
+BB.rhythmCount = r => r.hits.filter(x => x > 0).length;
+
+/* Write into one box of a progression. value: {r, q} a chord, {rest:true} silence, or null meaning
+   "same as before" (merges into the chord on its left). Only that box changes: every box after it keeps
+   sounding exactly as it did. start and len are in beats (slots). */
+BB.setChordCell = function (clip, start, len, value) {
+  const n = clip.slots.length, end = Math.min(n, start + len);
+  let after = null;
+  if (end < n && !clip.slots[end]) { let i = end - 1; while (i >= 0 && !clip.slots[i]) i--; if (i >= 0) after = BB.clone(clip.slots[i]); }
+  clip.slots[start] = value ? BB.clone(value) : null;
+  for (let i = start + 1; i < end; i++) clip.slots[i] = null;
+  if (after) clip.slots[end] = after;
+  return clip;
+};
+/* The finest box size (in beats) needed to show a progression without hiding a change: 4 bar, 2 half bar, 1 beat */
+BB.chordGridNeeded = function (clip) {
+  let g = 4;
+  if (clip) clip.slots.forEach((s, i) => { if (s) { if (i % 2) g = 1; else if (i % 4) g = Math.min(g, 2); } });
+  return g;
+};
+
 BB.MASTER_DEFAULT = { volume: 0.8, tone: 0.85, space: 0.3, echo: 0.2, echoTime: 'd8', drive: 0, pump: 0, lofi: 0 };
 BB.TRACK_MIX_DEFAULT = { vol: 0.8, pan: 0, mute: false, solo: false, tone: 1, space: 0.25, echo: 0.1 };
 
@@ -195,7 +259,7 @@ BB.newClip = function (trackId, opts = {}) {
   }
   if (type === 'chords') {
     const bars = opts.bars || 4;
-    return { name: opts.name || 'Chords', bars, style: opts.style || 'hold', slots: new Array(bars * 4).fill(null) };
+    return { name: opts.name || 'Chords', bars, style: opts.style || 'hold', rhythm: opts.rhythm ? BB.clone(opts.rhythm) : BB.chordRhythm({ style: opts.style || 'hold' }), slots: new Array(bars * 4).fill(null) };
   }
   return { name: opts.name || BB.TRACK[trackId].name, bars: opts.bars || 2, notes: [] };
 };
@@ -286,7 +350,7 @@ BB.migrate = function (p) {
     out.clips[t.id] = arr.map(c => {
       if (!c) return null;
       if (t.type === 'drums') { const base = BB.newClip('drums', { bars: c.bars || 1 }); c.steps = Object.assign(base.steps, c.steps || {}); c.rolls = c.rolls || {}; c.kit = c.kit || 'lofi'; }
-      if (t.type === 'chords') { c.slots = c.slots || new Array((c.bars || 4) * 4).fill(null); c.style = c.style || 'hold'; }
+      if (t.type === 'chords') { c.slots = c.slots || new Array((c.bars || 4) * 4).fill(null); c.style = c.style || 'hold'; c.rhythm = BB.clone(BB.chordRhythm(c)); }
       if (t.type === 'notes') c.notes = c.notes || [];
       return c;
     });
@@ -399,6 +463,7 @@ BB.state = {
   octave: { bass: 2, melody: 4, keys: 3, chords: 3 },
   chordStyle: 'hold',
   chordFlavor: 'triad',
+  chordRhythm: null, // rhythm for live pad playing when the scene has no chords clip yet
 };
 BB.setState = function (patch) {
   Object.assign(BB.state, patch);
