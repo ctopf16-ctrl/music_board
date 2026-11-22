@@ -125,7 +125,8 @@ UI.knob = function (o) {
     else return;
     e.preventDefault(); e.stopPropagation(); C.select(el, { noScroll: true });
   });
-  C.add(el, { key: o.key, label: o.label, adjust, text: () => fmt(o.value()) });
+  C.add(el, { key: o.key, label: o.hudLabel || o.label, adjust, text: () => fmt(o.value()) });
+  if (o.hudLabel) el.setAttribute('aria-label', o.hudLabel);
   el.update = update; update();
   return el;
 };
@@ -156,7 +157,8 @@ UI.fader = function (o) {
     else return;
     e.preventDefault(); e.stopPropagation();
   });
-  C.add(el, { key: o.key, label: o.label, adjust, text: () => fmt(o.value()) });
+  C.add(el, { key: o.key, label: o.hudLabel || o.label, adjust, text: () => fmt(o.value()) });
+  if (o.hudLabel) el.setAttribute('aria-label', o.hudLabel);
   el.update = update; update();
   return el;
 };
@@ -206,7 +208,7 @@ UI.toggle = function (o) {
     o.icon ? h('span', { class: 'ico', html: o.icon }) : null, o.text !== false ? h('span', 'btn-label', o.label) : null);
   const update = () => el.setAttribute('aria-pressed', !!o.value());
   el.addEventListener('click', () => { o.set(!o.value()); update(); });
-  C.add(el, { key: o.key, label: o.label, adjust: () => { o.set(!o.value()); update(); }, activate: () => { o.set(!o.value()); update(); }, text: () => (o.value() ? 'On' : 'Off'), instant: o.instant !== false });
+  C.add(el, { key: o.key, label: o.hudLabel || o.label, adjust: () => { o.set(!o.value()); update(); }, activate: () => { o.set(!o.value()); update(); }, text: () => (o.value() ? 'On' : 'Off'), instant: o.instant !== false });
   el.update = update; update();
   return el;
 };
@@ -451,6 +453,15 @@ Tour.show = function () {
       if (y < 10) { y = clamp(r.top, 10, window.innerHeight - chh - 10); x = r.right + 14; if (x + cw > window.innerWidth - 10) x = r.left - cw - 14; }
       card.style.left = clamp(x, 10, window.innerWidth - cw - 10) + 'px'; card.style.top = clamp(y, 10, window.innerHeight - chh - 10) + 'px';
     } else { card.style.left = ''; card.style.top = ''; }
+    /* phones: the card sits at the bottom, so scroll the target up above it */
+    if (r && BB.isMobile()) {
+      const overlap = r.bottom - (card.getBoundingClientRect().top - 12);
+      if (overlap > 0) {
+        window.scrollBy(0, Math.min(overlap, Math.max(0, r.top - 70)));
+        const r2 = tgt.getBoundingClientRect(), pad = 6;
+        Object.assign(shade.style, { left: r2.left - pad + 'px', top: r2.top - pad + 'px', width: r2.width + pad * 2 + 'px', height: r2.height + pad * 2 + 'px' });
+      }
+    }
     const next = card.querySelector('.btn.primary'); if (next) next.focus({ preventScroll: true });
   });
 };

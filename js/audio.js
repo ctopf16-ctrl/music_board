@@ -124,7 +124,8 @@ BB.createEngine = function (ac, project) {
   const comp = ac.createDynamicsCompressor();
   comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 3.2; comp.attack.value = 0.004; comp.release.value = 0.2;
   const master = G(0.8), analyser = ac.createAnalyser(); analyser.fftSize = 2048;
-  mix.connect(drive); drive.connect(tone); tone.connect(lofiLP); lofiLP.connect(lofiHP); lofiHP.connect(comp); comp.connect(master); master.connect(analyser);
+  const driveMakeup = G(1);
+  mix.connect(drive); drive.connect(driveMakeup); driveMakeup.connect(tone); tone.connect(lofiLP); lofiLP.connect(lofiHP); lofiHP.connect(comp); comp.connect(master); master.connect(analyser);
   analyser.connect(ac.destination);
   /* reverb + echo returns */
   const revIn = G(1), rev = ac.createConvolver(), revOut = G(0.3);
@@ -171,7 +172,8 @@ BB.createEngine = function (ac, project) {
     set(dlyOut.gain, m.echo * 1.1);
     const beats = { '16': 0.25, '8': 0.5, d8: 0.75, '4': 1 }[m.echoTime] || 0.75;
     set(dly.delayTime, Math.min(2.4, beats * 60 / P.bpm));
-    drive.curve = E.curve(m.drive);
+    drive.curve = m.drive < 0.01 ? null : E.curve(m.drive);
+    set(driveMakeup.gain, 1 / (1 + m.drive * 2));
     set(crackG.gain, m.lofi * 0.9);
     set(lofiLP.frequency, 20000 * Math.pow(3800 / 20000, m.lofi));
     set(lofiHP.frequency, 10 + m.lofi * 140);
