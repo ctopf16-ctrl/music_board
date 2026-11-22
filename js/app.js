@@ -60,7 +60,7 @@ function buildTopbar() {
   const mode = UI.seg({ label: 'Play mode', key: 'L', small: true, value: () => TR.mode, set: m => TR.setMode(m),
     tip: 'Loop plays the clips you launch, over and over. Song plays your arrangement from the Song tab, start to finish.',
     options: [{ id: 'loop', label: 'Loop', tip: 'Play the launched loops on repeat.' }, { id: 'song', label: 'Song', tip: 'Play the full arrangement from the Song tab.' }] });
-  const metro = UI.toggle({ label: 'Click', key: 'M', icon: I.metro, value: () => TR.metronome, set: v => TR.setMetronome(v), tip: 'A metronome tick on every beat to help you play in time. It is never recorded.' });
+  const metro = UI.toggle({ label: 'Click', key: 'M', icon: I.metro, cls: 'metro', value: () => TR.metronome, set: v => TR.setMetronome(v), tip: 'A metronome tick on every beat to help you play in time. It is never recorded.' });
   const tempo = UI.stepper({ label: 'Tempo', key: 'T', min: 50, max: 200, unit: 'BPM', value: () => p().bpm, set: setBpm,
     tip: 'Speed in beats per minute. Hip-hop ~85–95, pop ~100–120, house ~122–128, trap ~140. Number pad + and − also work.' });
   let taps = [];

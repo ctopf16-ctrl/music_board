@@ -135,7 +135,7 @@ function scheduleStep(abs, t, sd) {
 }
 
 function tick() {
-  if (!TR.playing || !BB.audio.ctx) return;
+  if (!TR.playing || !BB.audio.ctx || TR.endAt != null) return;
   const ac = BB.audio.ctx, sd = stepDur();
   if (TR.next < ac.currentTime - 0.05) TR.next = ac.currentTime + 0.02;
   while (TR.next < ac.currentTime + 0.12) {
