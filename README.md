@@ -30,7 +30,7 @@ Every screen has a **Tutorial** button. Hover over any dial or button to see wha
 | Keys | What they do |
 |---|---|
 | `Space` | Play / stop |
-| Number pad `0–9` | Tap drums from any screen: 1 kick, 2 snare, 3 clap, 4 hat, 5 open hat, 6 rim, 7–8 toms, 9 crash, 0 shaker. Hold Shift for a softer hit. |
+| Number pad `0–9` | Tap drums from any screen: 1 kick, 2 snare, 3 clap, 4 hat, 5 open hat, 6 rim, 7–8 toms, 9 crash, 0 shaker. Hold Shift for a softer hit. On the Chords screen, 1–8 play the chord pads instead. |
 | Number pad `.` `+` `−` `*` | Record on/off, tempo up/down, metronome |
 | `A`–`Z` | Pick the control with that letter (the letter shows on each control) |
 | `←` `→` | Change the picked control (hold Shift to move faster) |

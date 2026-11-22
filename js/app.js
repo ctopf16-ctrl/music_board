@@ -282,7 +282,7 @@ function openHelp() {
     h('div', 'sheet-section', h('h4', null, 'Keyboard shortcuts'),
       h('dl', 'shortcuts',
         sc(['Space'], 'Play / stop'),
-        sc(['Num 0–9'], 'Tap drums from any screen: 1 kick, 2 snare, 3 clap, 4 hat, 5 open hat, 6 rim, 7–8 toms, 9 crash, 0 shaker. Hold Shift for a softer hit.'),
+        sc(['Num 0–9'], 'Tap drums from any screen: 1 kick, 2 snare, 3 clap, 4 hat, 5 open hat, 6 rim, 7–8 toms, 9 crash, 0 shaker. Hold Shift for a softer hit. On the Chords screen, 1–8 play the chord pads.'),
         sc(['1–0'], 'Same drums on the top number row (on the Loops and Chords screens these pick scenes and chords instead)'),
         sc(['Num .'], 'Record on / off'),
         sc(['Num +', 'Num −'], 'Tempo up / down'),

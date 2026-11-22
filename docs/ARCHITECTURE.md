@@ -62,9 +62,13 @@ Clip formats. Steps are 16th notes, so one bar is 16 steps.
   Each steps array has `bars*16` entries, where 0 means off and 0.01–1 is the velocity. `rolls[v][i]` repeats
   that hit 2–4 times inside the step (trap hi-hat rolls). The 10 voices are in `BB.DRUM_VOICES`.
 - **notes**: `{name, bars, notes: [{s: startStep, d: lengthSteps, m: midiNote, v: velocity 0..1}]}`
-- **chords**: `{name, bars, style, slots: [null | {r: rootPitchClass, q: quality} | {rest: true}]}`.
+- **chords**: `{name, bars, rhythm, slots: [null | {r: rootPitchClass, q: quality} | {rest: true}]}`.
   There is one slot per beat (`bars*4`). A chord lasts until the next non-null slot. `q` is a key of
-  `BB.theory.QUALITIES`. `style` is an id from `BB.CHORD_STYLES` (hold, strum, pulse, stabs, bounce, arp, arpdown).
+  `BB.theory.QUALITIES`. `rhythm = {hits: [16 strengths, one bar], feel: 'block'|'strum'|'arp'|'arpdown'|'bounce', len: 'ring'|'short'}`.
+  A chord strikes when it starts and on every hit while it lasts. Presets: `BB.CHORD_RHYTHMS`, `BB.CHORD_FEELS`, `BB.CHORD_LENGTHS`;
+  helpers `BB.chordRhythm(clip)` (also converts the older `clip.style`), `BB.rhythmFromPreset`, `BB.rhythmPresetId`, `BB.rhythmCount`.
+  Edit one box of a progression with `BB.setChordCell(clip, startSlot, lenSlots, chord | {rest:true} | null)`: only that box changes.
+  `BB.chordGridNeeded(clip)` gives the finest box size (4/2/1 beats) needed to show every change.
 
 Helpers: `BB.newClip(trackId, {bars, kit, style, name})`, `BB.resizeClip(trackId, clip, bars)` (grows by repeating),
 `BB.clipIsEmpty`, `BB.chordAt(clip, step)` (returns `{root, q, start, end, slot}`), `BB.sceneLength(p, scene)`, `BB.songTimeline(p)`.
@@ -177,6 +181,8 @@ Global keys are handled in `app.js`:
   letters, then the top-row digits 1–0 fall back to drums. With **Shift**, letters always go to controls first.
 - Views where letters play notes (Keys, Chords) set `letterMode: 'notes'`. Their badges then show ⇧, and controls
   are picked with Shift+letter. Plain letters still reach controls if the view doesn't use them.
+- Number-pad keys play drums, unless the view sets `numpad: true`: then `view.keydown(e)` sees them first and anything it
+  doesn't use (returns false) still plays drums.
 - `view.keyup(e)` is called on every keyup (release notes there). Ignore `e.repeat` for notes and pads.
 - Left/Right arrows go to a picked control first. Only if nothing is picked does `view.keydown(e)` get them.
   Up/Down go to the view only when nothing is picked.
@@ -204,7 +210,7 @@ BB.views.register({
 - Add `data-no-press-tip` to playable pads and keys so press-and-hold on a phone plays them instead of showing a tooltip.
 - **Tooltips:** every interactive control needs `data-tip` (plus `data-tip-title`, or the UI kit `tip` option),
   written in plain, friendly language for someone who has never made music. Say what it does and why you'd use it.
-- **Tutorials:** 5–8 steps per view. Each `target` (a selector or function) must point at a visible element in
+- **Tutorials:** 5–8 steps per view. Hands-on steps add `task` (an instruction) and `check: () => bool`; the tour waits, ticks and moves on. Each `target` (a selector or function) must point at a visible element in
   your view. Put `UI.tourButton(id)` in the view header. Start with what the screen is for, and end with a "try this" idea.
 - Prefix CSS selectors with `.view[data-view="<id>"]` or a unique root class so screens don't collide.
 - Don't use `alert`, `confirm` or `prompt`. Use `UI.sheet` and `UI.toast`.
