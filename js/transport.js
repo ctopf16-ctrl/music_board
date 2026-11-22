@@ -172,7 +172,7 @@ TR.frame = function () {
   }
 };
 
-TR.anyLaunched = () => BB.TRACKS.some(t => TR.launched[t.id]);
+TR.anyLaunched = () => BB.TRACKS.some(t => TR.launched[t.id] && BB.store.clip(t.id, TR.launched[t.id].scene));
 TR.play = function () {
   if (!BB.audio.init() || TR.playing) return;
   const ac = BB.audio.ctx;
@@ -254,7 +254,7 @@ TR.launchScene = function (scene, opts = {}) {
 };
 TR.stopAll = function () {
   for (const t of BB.TRACKS) {
-    if (TR.playing && TR.mode === 'loop') { if (TR.launched[t.id]) TR.queued[t.id] = -1; }
+    if (TR.playing && TR.mode === 'loop') { if (TR.launched[t.id]) TR.queued[t.id] = -1; else delete TR.queued[t.id]; }
     else TR.launched[t.id] = null;
   }
   BB.emit('launch', {});

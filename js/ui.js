@@ -25,7 +25,7 @@ C.add = function (el, spec) {
   if (!el.hasAttribute('tabindex') && !/^(BUTTON|SELECT|INPUT)$/.test(el.tagName)) el.tabIndex = 0;
   return el;
 };
-const visible = el => el && el.isConnected && el.offsetParent !== null && !el.closest('[hidden]');
+const visible = el => el && el.isConnected && el.getClientRects().length > 0 && !el.closest('[hidden]');
 C.scopeEls = function () {
   const view = BB.$('.view[data-view="' + BB.state.view + '"]');
   const inView = view ? BB.$$('.ctl', view) : [];
@@ -356,7 +356,7 @@ UI.sheet = function (o) {
   const body = h('div', 'sheet-body'); if (o.body) body.append(o.body);
   const actions = (o.actions || []).map(a => h('button', { class: 'btn ' + (a.primary ? 'primary' : '') + (a.danger ? ' danger' : ''), onclick: () => { const keep = a.onClick && a.onClick(); if (!keep) close(); } }, a.label));
   const card = h('div', { class: 'sheet' + (o.wide ? ' wide' : ''), role: 'dialog', 'aria-modal': 'true', 'aria-label': o.title },
-    h('div', 'sheet-head', h('h2', null, o.title), h('button', { class: 'btn ghost icon-only', 'aria-label': 'Close', onclick: close, html: UI.ICONS.close })),
+    h('div', 'sheet-head', h('h2', null, o.title), h('button', { class: 'btn ghost icon-only', 'aria-label': 'Close', onclick: close }, h('span', { class: 'ico', html: UI.ICONS.close }))),
     body, actions.length ? h('div', 'sheet-actions', actions) : null);
   const wrap = h('div', { class: 'sheet-wrap', onclick: e => { if (e.target === wrap) close(); } }, card);
   document.body.append(wrap);
@@ -435,7 +435,7 @@ Tour.show = function () {
   requestAnimationFrame(() => {
     if (!Tour.active) return;
     const tgt = typeof st.target === 'function' ? st.target() : (st.target ? BB.$(st.target) : null);
-    const ok = tgt && tgt.offsetParent !== null;
+    const ok = tgt && tgt.isConnected && tgt.getClientRects().length > 0 && !tgt.closest('[hidden]');
     if (ok) tgt.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
     const r = ok ? tgt.getBoundingClientRect() : null;
     const { shade, card } = A;
@@ -444,7 +444,7 @@ Tour.show = function () {
     card.innerHTML = '';
     const n = A.def.steps.length;
     card.append(
-      h('div', 'tour-top', h('span', 'tour-count', `${A.def.title} · ${A.i + 1} of ${n}`), h('button', { class: 'btn ghost icon-only sm', 'aria-label': 'Close tutorial', onclick: Tour.stop, html: UI.ICONS.close })),
+      h('div', 'tour-top', h('span', 'tour-count', `${A.def.title} · ${A.i + 1} of ${n}`), h('button', { class: 'btn ghost icon-only sm', 'aria-label': 'Close tutorial', onclick: Tour.stop }, h('span', { class: 'ico', html: UI.ICONS.close }))),
       h('h3', null, st.title),
       h('p', { html: st.text }),
       h('div', 'tour-actions',

@@ -32,6 +32,7 @@ js/app.js             boots everything: transport bar, tabs, global keys, menus,
 - Surfaces, from back to front: `--bg` (page), `--panel` (device), `--raise` (cards and panels),
   `--well` (inset areas). Text uses `--ink`, `--ink-2` (secondary) and `--ink-3`. Lines use `--line`.
 - Fonts: `--font-display` (headings, chord names), `--font-body`, `--font-mono` (labels, numbers).
+- `.sel` is the dropdown wrapper from `UI.select`; its styles only apply when it wraps a `<select>`. Use another name (e.g. `.is-sel`) for "selected" states.
 - Shared classes: `.view-head .view-title .view-sub`, `.panel .panel-head .hint`, `.empty`, `.pill`, `.row`,
   `.grow`, `.btn` (+ `.sm .ghost .primary .danger .icon-only .toggle .colored`), `.seg`, `.sel`,
   `.pkeys .pkey.white/.black/.lit` (piano look).
@@ -106,7 +107,7 @@ The app calls view hooks for you (see below), so most views only need `render` a
 
 ## Transport (`BB.transport`, alias `TR`)
 
-- `play()`, `stop()`, `toggle()`, `playing`, `mode` (`'loop'|'song'`), `setMode(m)`, `rec`, `setRec(b)`, `metronome`.
+- `play()`, `stop()`, `toggle()`, `playing`, `mode` (`'loop'|'song'`), `setMode(m)`, `rec`, `setRec(b)`, `metronome`, `setMetronome(b)`, `loopSong`, `setLoopSong(b)`.
 - **Loop mode** (clips play like a loop launcher): `launchClip(track, scene)`, `stopClip(track)`, `toggleClip(track, scene)`,
   `launchScene(scene)`, `stopAll()`, `isLaunched(track, scene)`, `queuedFor(track)` (a scene, `-1` meaning stop at the next bar, or `undefined`).
   While playing, launches wait for the next bar. While stopped, they apply immediately.
@@ -116,7 +117,8 @@ The app calls view hooks for you (see below), so most views only need `render` a
   `drumHit(voiceId, vel)`, `noteOn(trackId, midi, vel)` / `noteOff(trackId, midi)`, `chordOn(root, q, {style})` / `chordOff()`, `allNotesOff()`.
   These play right away on the track's instrument. When recording, they write into the right clip, quantized,
   creating and launching a clip in `BB.state.scene` if needed. Always use these for anything the user plays.
-- `BB.renderAudio({mode:'song'}|{mode:'scene', scene, bars, onProgress})` returns a Promise of an AudioBuffer.
+- `BB.renderAudio({mode:'song'}|{mode:'scene', scene, bars, onProgress})` returns a Promise of an AudioBuffer. It creates voices just
+  ahead of the render position (OfflineAudioContext suspend/resume), so it runs faster than real time and reports real progress.
   `BB.encodeWav(buffer)` returns a Blob, and `BB.download(blob, filename)` saves it.
 
 ## Sound (`js/audio.js`)
@@ -143,7 +145,8 @@ for the current mode. `harmonyFor(p, scene)` gives `fn(step) → {root, q, degre
 ## UI kit (`BB.ui`, see `js/ui.js`)
 
 All components return an element with an `.update()` method that re-reads `value()`. Call it from your `render()`.
-Every option bag accepts `tip` (tooltip text), `key` (keyboard letter) and `label`.
+Every option bag accepts `tip` (tooltip text), `key` (keyboard letter) and `label`. Knob, fader and toggle also take
+`hudLabel`, a longer name for the keyboard HUD and screen readers (e.g. "Bass volume").
 - `knob({label, min, max, step, value(), set(v), fmt(v), def, size:'sm'|'md'|'lg', color:'drums'…})`
 - `fader({label, value(), set(v), min, max, orient:'v'|'h', color, def})`
 - `seg({label, options:[{id, label, tip, color, icon}], value(), set(id), small})`
@@ -154,7 +157,8 @@ Every option bag accepts `tip` (tooltip text), `key` (keyboard letter) and `labe
 - `instrumentSelect(trackId, {key, small})`, `kitSelect({value(), set(id), key, small})`
 - `tourButton(viewId)`: put one in every view header
 - `glide(container, selector, onEl, offEl)`: press and slide across keys/pads
-- `toast(text, {action:{label, onClick}})`, `sheet({title, body, actions:[{label, primary, danger, onClick}], wide})` returns `{close}`
+- `toast(text, {action:{label, onClick}, replace: 'id', ms})` returns the toast element. A newer toast with the same `replace` id replaces the older one.
+- `sheet({title, body, actions:[{label, primary, danger, onClick}], wide})` returns `{close}`
 - `UI.ICONS.*`: inline SVG strings (play, stop, rec, plus, trash, copy, edit, dice, download, …)
 - `BB.h(tag, attrs, ...children)`: tiny element builder (`{class, html, text, style:{}, dataset:{}, onclick, 'data-tip': …}`)
 
@@ -197,6 +201,7 @@ BB.views.register({
 })();
 ```
 - Listen to `ui` (scene changes) and `launch`/`transport` with `BB.on` if your view shows those.
+- Add `data-no-press-tip` to playable pads and keys so press-and-hold on a phone plays them instead of showing a tooltip.
 - **Tooltips:** every interactive control needs `data-tip` (plus `data-tip-title`, or the UI kit `tip` option),
   written in plain, friendly language for someone who has never made music. Say what it does and why you'd use it.
 - **Tutorials:** 5–8 steps per view. Each `target` (a selector or function) must point at a visible element in

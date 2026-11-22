@@ -64,7 +64,7 @@ function buildTopbar() {
   const tempo = UI.stepper({ label: 'Tempo', key: 'T', min: 50, max: 200, unit: 'BPM', value: () => p().bpm, set: setBpm,
     tip: 'Speed in beats per minute. Hip-hop ~85–95, pop ~100–120, house ~122–128, trap ~140. Number pad + and − also work.' });
   let taps = [];
-  const tap = UI.button({ label: 'Tap', icon: I.tap, cls: 'sm ghost', text: false, tip: 'Tap this in time with a song in your head to set the tempo.', onClick: () => {
+  const tap = UI.button({ label: 'Tap', icon: I.tap, cls: 'sm ghost tap-btn', text: false, tip: 'Tap this in time with a song in your head to set the tempo.', onClick: () => {
     const now = performance.now(); taps = taps.filter(t => now - t < 2500); taps.push(now);
     if (taps.length >= 3) { const d = (taps[taps.length - 1] - taps[0]) / (taps.length - 1); setBpm(60000 / d); }
   } });
