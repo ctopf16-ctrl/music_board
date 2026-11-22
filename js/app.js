@@ -186,7 +186,7 @@ function onKeyDown(e) {
   if (code === 'NumpadAdd' || code === 'NumpadSubtract') { e.preventDefault(); setBpm(BB.store.p.bpm + (code === 'NumpadAdd' ? 1 : -1) * (e.shiftKey ? 5 : 1)); UI.toast('Tempo ' + BB.store.p.bpm + ' BPM', { ms: 900 }); return; }
   if (code === 'NumpadMultiply') { e.preventDefault(); TR.setMetronome(!TR.metronome); return; }
   if (code === 'NumpadDivide') { e.preventDefault(); TR.setMode(TR.mode === 'loop' ? 'song' : 'loop'); return; }
-  if (e.key === 'Escape') { if (C.sel) C.clear(); else if (TR.playing) TR.stop(); return; }
+  if (e.key === 'Escape') { if (C.sel) C.clear(); else if (view && view.keydown && view.keydown(e)) e.preventDefault(); else if (TR.playing) TR.stop(); return; }
   /* arrows: the picked control first, then the screen, then pick something */
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     const dir = e.key === 'ArrowRight' ? 1 : -1;

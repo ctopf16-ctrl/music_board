@@ -185,6 +185,7 @@ body:not(.show-keys) .cp-mkey { visibility: hidden; }
   .cp-ctl .seg button { justify-content: center; padding: 0 4px; }
   .cp-pads { gap: 6px; }
   .cp-pad { height: 80px; padding: 7px 8px 6px; border-radius: 12px; }
+  .cp-pads.placing .cp-pad { outline-width: 1.5px; outline-offset: -4px; }
   .cp-name { font-size: 22px; }
   .cp-num { font-size: 11px; }
   .cp-kc { min-width: 16px; height: 16px; padding: 0 3px; font-size: 9.5px; }

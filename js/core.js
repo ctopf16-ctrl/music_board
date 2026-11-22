@@ -119,9 +119,7 @@ const NUMERALS = ['I', '♭II', 'II', '♭III', 'III', 'IV', '♯IV', 'V', '♭V
 T.numeral = function (key, root, q) {
   let n = NUMERALS[(((root - key) % 12) + 12) % 12];
   if (T.MINORISH_Q.has(q)) n = n.replace(/[IV]+/, s => s.toLowerCase());
-  if (q === 'dim') n += '°';
-  if (q === 'm7b5') n += 'ø';
-  if (q === 'dom7') n += '7';
+  n += { dim: '°', m7b5: 'ø7', dom7: '7', aug: '+', maj7: 'maj7', m7: '7', sus2: 'sus2', sus4: 'sus4', add9: 'add9', madd9: 'add9', maj6: '6', m6: '6' }[q] || '';
   return n;
 };
 /* Diatonic chord on scale degree (0-6) built by stacking thirds.

@@ -395,7 +395,7 @@ document.addEventListener('pointerover', e => {
 document.addEventListener('pointerdown', e => {
   Tip.hide();
   if (e.pointerType === 'mouse') return;
-  const t = e.target.closest && e.target.closest('[data-tip]'); if (!t) return;
+  const t = e.target.closest && e.target.closest('[data-tip]'); if (!t || t.closest('[data-no-press-tip]')) return;
   const x = e.clientX, y = e.clientY;
   const lp = setTimeout(() => {
     Tip.show(t);
