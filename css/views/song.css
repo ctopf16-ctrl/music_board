@@ -35,6 +35,8 @@
 #view-song .sb-name { flex: 1 1 auto; min-width: 0; font-family: var(--font-display); font-weight: 700; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #view-song .sb-meta { position: relative; display: flex; flex-wrap: wrap; column-gap: 8px; height: 15px; overflow: hidden; font: 500 11px/15px var(--font-mono); color: var(--ink-2); white-space: nowrap; }
 #view-song .sb-meta .sb-at { display: none; }
+#view-song .sb-meta > span + span::before { content: "·"; margin-right: 6px; color: var(--ink-3); }
+#view-song .sb-meta { column-gap: 6px; }
 
 /* tiny stripes: one lane per track, split where the loop repeats */
 #view-song .sb-lanes { position: relative; display: grid; gap: 2px; padding: 1px 0; }
@@ -179,6 +181,8 @@ body.sg-grabbing, body.sg-grabbing * { cursor: grabbing !important; }
 
 @media (max-width: 1100px) {
   #view-song .sg-lower { grid-template-columns: minmax(0, 1fr); }
+  #view-song .sg-ti { flex-basis: 100%; }
+  #view-song .sg-tools > .grow { display: none; }
 }
 
 /* ---------------- phones: a vertical list of big cards ---------------- */

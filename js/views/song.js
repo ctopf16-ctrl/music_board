@@ -690,7 +690,8 @@ function mount(el) {
 
   /* add: scene palette + quick templates */
   palGrid = h('div', 'sg-pal-grid');
-  palette = h('div', { class: 'sg-palette', id: 'song-palette', role: 'group', 'aria-label': 'Add a scene' }, palGrid);
+  palette = h('div', { class: 'sg-palette', id: 'song-palette', role: 'group', 'aria-label': 'Add a scene', 'data-tip-title': 'Add a scene',
+    'data-tip': 'Your scenes. Tap one to add it to the end of the song. With the keyboard: pick this, choose a scene with ← →, then press Enter.' }, palGrid);
   C.add(palette, { key: 'A', label: 'Add a scene', adjust: dir => movePalHi(dir), activate: () => { if (palHi >= 0) addBlock(palHi); },
     text: () => (palHi >= 0 ? (palHi + 1) + ' · ' + sceneName(P(), palHi) : 'No scenes yet') });
   palSec = h('div', 'sg-sec',
@@ -783,7 +784,11 @@ BB.views.register({
     { view: 'song', target: () => vis('.sb.is-sel .sb-rep') || vis('#song-arr'), title: 'Repeats',
       text: '<b>×2</b> means the scene plays twice in a row. Use <b>−</b> and <b>+</b> to make a section longer or shorter. On a keyboard, pick a block with <b>← →</b> and press <b>=</b> or <b>-</b>.' },
     { view: 'song', target: () => vis('#song-tools .sg-tools-edit') || vis('.sb.is-sel .sb-more') || vis('#song-arr'), title: 'Change the order',
-      text: 'Drag a block with the mouse to move it, or use the arrow buttons. <b>Duplicate</b> copies a block and the bin removes it. Made a mistake? <b>Undo</b> is in the top bar.' },
+      get text() {
+        return (BB.isMobile() ? 'Use the <b>arrow</b> buttons on a card to move it earlier or later. The <b>copy</b> button duplicates it and the <b>bin</b> removes it.'
+          : 'Drag a block with the mouse to move it, or use <b>Earlier</b> and <b>Later</b> (Shift+← → on the keyboard). <b>Duplicate</b> copies a block and <b>Remove</b> takes it out.')
+          + ' Made a mistake? <b>Undo</b> is in the top bar.';
+      } },
     { view: 'song', target: '#song-play', title: 'Play your song',
       text: '<b>Play song</b> plays everything from the start, and <b>▶</b> on a block starts from there. While it plays, the <b>Loop / Song</b> switch in the top bar shows <b>Song</b>. Flip it back to <b>Loop</b> to jam with single loops again.' },
     { view: 'song', target: '#song-templates', title: 'Quick templates',

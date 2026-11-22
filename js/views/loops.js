@@ -118,6 +118,7 @@ function buildTools() {
   T.swap = b({ label: 'Add loop', icon: I.plus, key: 'A', tip: '', run: () => sel && openLibrary(sel.t, sel.s) });
   T.edit = b({ label: 'Edit', icon: I.edit, key: 'E', cls: 'sm lp-for-clip', tip: '', run: () => sel && clipAt(sel.t, sel.s) && goEdit(sel.t, sel.s) });
   T.dup = b({ label: 'Duplicate', icon: ICON.dup, key: 'D', cls: 'sm lp-for-clip', tip: 'Makes a copy in the next empty scene of this track. Handy for making a variation.', run: duplicateSel });
+  T.dup.querySelector('.btn-label').dataset.short = 'Clone';   // shorter label on very narrow phones
   T.copy = b({ label: 'Copy', icon: I.copy, key: 'C', cls: 'sm lp-for-clip', tip: `Remembers this loop so you can paste it into another square. Shortcut: ${MOD}C.`, run: copySel });
   T.paste = b({ label: 'Paste', icon: ICON.paste, key: 'P', tip: `Puts the copied loop into the selected square. Shortcut: ${MOD}V.`, run: pasteSel });
   T.del = b({ label: 'Delete', icon: I.trash, key: 'X', cls: 'sm danger lp-for-clip', tip: 'Removes this loop. You can undo it. Shortcut: the Delete key.', run: deleteSel });
@@ -334,7 +335,7 @@ function refreshState() {
         if (on) { live[s]++; trackLive = true; }
         if (isQ) queued[s] = true;
         const bars = el.querySelector('.lp-bars');
-        if (bars) bars.textContent = isQ ? 'Next bar' : stopping ? 'Stopping' : barsText(p.clips[tr.id][s].bars);
+        if (bars) { bars.textContent = isQ ? 'Next bar' : stopping ? 'Stopping' : barsText(p.clips[tr.id][s].bars); bars.classList.toggle('is-status', isQ || stopping); }
         el.setAttribute('aria-pressed', String(on));
         el.setAttribute('aria-label', el._label + (isQ ? ', starts on the next bar' : stopping ? ', stops on the next bar' : on ? (playing ? ', playing' : ', ready to play') : '') + (silent ? ', muted' : ''));
       } else {

@@ -185,6 +185,8 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
   .lp-colhead { grid-template-columns: minmax(0, 1fr); grid-template-areas: "name" "inst" "btns"; row-gap: 3px; padding: 9px 8px; }
   .lp-ch-btns { margin-top: 4px; }
   .lp-tools .lp-ctx { max-width: 200px; }
+  .lp-bars:not(.is-status) { display: none; }
+  .lp-cell { padding: 7px 8px 8px; }
 }
 
 /* ---------- phones: one track at a time, toolbar above the tab bar ---------- */
@@ -266,9 +268,14 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
   .lp-acts .btn .ico { width: 20px; height: 20px; }
   .lp-acts .btn .btn-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .lp-tools[data-state="empty"] .lp-acts .btn { flex-direction: row; height: 44px; font-size: 14px; gap: 7px; }
+  .lp-acts .btn .btn-label[data-short] { white-space: nowrap; }
   /* while the floating toolbar shows on this screen, messages pop up above it instead of covering it */
   body:has(.lp-view:not([hidden]) .lp-tools:not([data-state="none"])) #toasts { bottom: calc(var(--nav-h) + 142px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* an older Undo toast from this screen is replaced at once */
 .toast.lp-undo.lp-stale { display: none; }
+@media (max-width: 400px) {
+  .lp-acts .btn .btn-label[data-short] { font-size: 0; }
+  .lp-acts .btn .btn-label[data-short]::after { content: attr(data-short); font-size: 10.5px; }
+}
