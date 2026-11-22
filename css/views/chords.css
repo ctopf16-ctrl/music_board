@@ -144,12 +144,12 @@
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .cp-mbar {
-  --tint: calc(14% + var(--i) * 1.7%);
+  --tint: calc(16% + var(--i) * 1.7%);
   position: relative; height: calc(100% - var(--i) * 5%); min-height: 64px; min-width: 0; margin: 0;
   display: grid; grid-template-rows: auto 1fr auto; justify-items: center; align-items: center; padding: 9px 0 8px;
   border: 0; border-radius: 10px; color: var(--ink);
   background: color-mix(in oklab, var(--c) var(--tint), var(--well));
-  box-shadow: inset 0 -3px 0 rgba(0,0,0,.08);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--c) 22%, transparent), inset 0 -3px 0 rgba(0,0,0,.08);
   font-family: var(--font-mono); font-weight: 700;
   touch-action: none; transition: background .25s ease-out, box-shadow .25s ease-out;
 }

@@ -500,6 +500,51 @@ function endDrag(commit) {
 }
 
 /* ---------------- export ---------------- */
+/* Offline render that creates each voice just before it plays (OfflineAudioContext.suspend), so the
+   audio graph stays small. Same output as BB.renderAudio, which builds every voice of the whole song
+   up front and gets slower than real time on long songs; this also reports real progress.
+   Uses BB.renderAudio when the core sets BB.renderAudio.incremental, or when suspend is missing (Firefox). */
+async function renderWav(opts, onProgress) {
+  const OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  if (BB.renderAudio.incremental || !OAC || typeof OAC.prototype.suspend !== 'function') return BB.renderAudio(Object.assign({}, opts, { onProgress }));
+  const p = BB.clone(BB.store.p), sd = 60 / p.bpm / 4, sr = 44100;
+  let total, resolver;
+  if (opts.mode === 'scene') {
+    const scene = opts.scene || 0, bars = opts.bars || Math.max(4, BB.sceneLength(p, scene) / 16);
+    total = bars * 16;
+    resolver = (id, abs) => { const c = p.clips[id][scene]; return c ? { clip: c, pos: abs % (c.bars * 16) } : null; };
+  } else {
+    const tl = BB.songTimeline(p);
+    if (!tl.total) throw new Error('The song is empty. Add scenes to the song first.');
+    total = tl.total;
+    resolver = (id, abs) => { const b = tl.blocks.find(x => abs >= x.start && abs < x.start + x.len); if (!b) return null; const c = p.clips[id][b.scene]; return c ? { clip: c, pos: (abs - b.start) % (c.bars * 16) } : null; };
+  }
+  const oac = new OAC(2, Math.ceil(sr * (total * sd + 3.5)), sr);
+  const E = BB.createEngine(oac, p);
+  E.applyMix(p);
+  const t0 = 0.05, CHUNK = 32;
+  let next = 0, failed = null;
+  const schedule = upto => {
+    for (; next < Math.min(upto, total); next++) {
+      const abs = next, t = t0 + abs * sd + (abs % 2 ? p.swing * sd * 0.66 : 0);
+      if (abs % 4 === 0) E.pump(t, sd * 4);
+      for (const tr of BB.TRACKS) { const r = resolver(tr.id, abs); if (r) BB.playTrackStep(E, p, tr.id, r.clip, r.pos, t, sd); }
+    }
+  };
+  schedule(CHUNK * 2);
+  for (let k = 1; k * CHUNK < total; k++) {
+    const at = Math.floor((t0 + k * CHUNK * sd) * sr / 128) * 128 / sr;
+    oac.suspend(at).then(() => {
+      try { schedule((k + 2) * CHUNK); } catch (e) { failed = failed || e; }
+      if (onProgress) onProgress(Math.min(0.99, (k * CHUNK) / total));
+      oac.resume();
+    });
+  }
+  const buf = await oac.startRendering();
+  if (failed) throw failed;
+  if (onProgress) onProgress(1);
+  return buf;
+}
 async function runExport(kind) {
   if (busy) return;
   const p = P();
@@ -516,11 +561,12 @@ async function runExport(kind) {
     fname = fileBase(p.name) + '-' + fileBase(sceneName(p, s)) + '.wav';
     what = sceneName(p, s) + ' (' + barsTxt(exportBars) + ')';
   }
-  setBusy(true, 'Making a sound file of ' + what + '…');
+  setBusy(true, 'Making a sound file of ' + what);
   await new Promise(r => requestAnimationFrame(() => setTimeout(r, 40))); // let the progress state paint first
   try {
-    const buf = await BB.renderAudio(Object.assign(opts, { onProgress: f => { if (f >= 1) setDone('Saving ' + fname + '…'); } }));
-    setDone('Saving ' + fname + '…');
+    const buf = await renderWav(opts, setProgress);
+    setProgress(1, 'Saving ' + fname + '…');
+    await new Promise(r => setTimeout(r, 20));
     const blob = BB.encodeWav(buf);
     BB.download(blob, fname);
     UI.toast('Saved ' + fname + ' (' + fmtTime(buf.duration) + '). Check your downloads.', { ms: 4000 });
@@ -531,20 +577,28 @@ async function runExport(kind) {
     setBusy(false);
   }
 }
+let progLabel = '', progT0 = 0;
 function setBusy(on, text) {
   busy = on;
   exportPanel.classList.toggle('busy', on);
   progEl.hidden = !on;
   progEl.classList.add('indet');
+  progEl.style.setProperty('--f', 0);
   clearInterval(progTimer);
   if (on) {
-    const t0 = Date.now();
-    progText.textContent = text;
-    progTimer = setInterval(() => { if (progEl.classList.contains('indet')) progText.textContent = text + ' ' + Math.round((Date.now() - t0) / 1000) + 's'; }, 500);
+    progLabel = text; progT0 = Date.now();
+    progText.textContent = text + '…';
+    /* no progress reports (core renderer): show the time spent so it still feels alive */
+    progTimer = setInterval(() => { if (progEl.classList.contains('indet')) progText.textContent = progLabel + '… ' + Math.round((Date.now() - progT0) / 1000) + 's'; }, 500);
   }
   renderExport(P(), BB.songTimeline(P()));
 }
-function setDone(text) { progEl.classList.remove('indet'); progText.textContent = text; }
+function setProgress(f, text) {
+  if (!busy) return;
+  progEl.classList.remove('indet');
+  progEl.style.setProperty('--f', clamp(f, 0, 1).toFixed(3));
+  progText.textContent = text || progLabel + '… ' + Math.round(clamp(f, 0, 1) * 100) + '%';
+}
 
 /* Called by the Project menu ("Export audio") after it opens this screen. */
 BB.exportWav = function () {

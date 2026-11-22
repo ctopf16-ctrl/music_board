@@ -716,7 +716,7 @@ function keydown(e) {
 /* ================= tutorial ================= */
 const inView = sel => BB.$$('.lp-view ' + sel).filter(el => el.offsetParent !== null);
 const tutorial = [
-  { view: 'loops', target: () => BB.$('.lp-view .lp-board'), title: 'Loops and scenes',
+  { view: 'loops', target: () => (BB.isMobile() ? V.panel : V.board), title: 'Loops and scenes',
     get text() {
       return 'This grid holds the building blocks of your song. Each square is a <b>loop</b>: a short pattern that repeats. ' +
         (BB.isMobile() ? 'The strip on top picks the instrument (a <b>track</b>), ' : 'Each column is an instrument (a <b>track</b>), ') +
@@ -724,17 +724,19 @@ const tutorial = [
     } },
   { view: 'loops', target: () => inView('.lp-cell:not(.is-empty)')[0] || BB.$('.lp-view .lp-board'), title: 'Tap to start and stop',
     text: 'Press a loop to start it, and press it again to stop. While music plays, changes wait for the next bar so everything stays in time. A <b>blinking</b> loop is waiting for its turn. Each track plays one loop at a time.' },
-  { view: 'loops', target: () => inView('.lp-launch')[0], title: 'Launch a whole row',
+  { view: 'loops', target: () => inView(BB.isMobile() ? '.lp-launch' : '.lp-scene')[0], title: 'Launch a whole row',
     get text() {
       return 'The <b>▶</b> button at the start of a row starts every loop in that scene at once, so a whole section changes together. ' +
         (BB.isMobile() ? 'To rename a scene, select a loop in its row and press the pencil.' : 'Number keys <b>1–8</b> do the same. The pencil next to it renames the scene.');
     } },
   { view: 'loops', target: () => inView('.lp-cell.is-empty')[0] || BB.$('.lp-view .lp-board'), title: 'Add starter loops',
     text: 'Press a <b>+</b> square to pick a ready-made loop, or start a blank one. Bass, melodies and keys follow the chords in their row, so they always fit together.' },
-  { view: 'loops', target: () => V.tools, title: 'Edit, copy and more',
-    before() { if (!sel) { const t = BB.isMobile() ? ptrack : 0; const s = (V.cells[t].findIndex((c, i) => clipAt(t, i))); select(t, s >= 0 ? s : BB.state.scene); } },
+  /* On phones the tutorial card sits where the floating toolbar is, so point at the selected loop instead */
+  { view: 'loops', target: () => (BB.isMobile() ? (sel && V.cells[sel.t][sel.s]) : V.tools), title: 'Edit, copy and more',
+    before() { if (!sel) { const t = BB.isMobile() ? ptrack : 0; const s = V.cells[t].findIndex((c, i) => clipAt(t, i)); select(t, s >= 0 ? s : BB.state.scene); } },
     get text() {
-      return 'The selected loop’s toolbar. <b>Edit</b> opens it in its editor, <b>Swap</b> tries another starter loop, and you can duplicate, copy, paste, change its length or delete it. Undo is always there if you change your mind.' +
+      return (BB.isMobile() ? 'Tapping a loop also selects it and opens a toolbar at the bottom of the screen. ' : 'The selected loop’s toolbar. ') +
+        '<b>Edit</b> opens the loop in its editor, <b>Swap</b> tries another starter loop, and you can duplicate, copy, paste, change its length or delete it. Undo is always there if you change your mind.' +
         (document.body.classList.contains('show-keys') ? ' The little letters are keyboard shortcuts.' : '');
     } },
   { view: 'loops', target: () => inView('.lp-colhead')[0], title: 'Mute, solo and stop',
@@ -742,7 +744,7 @@ const tutorial = [
       return (BB.isMobile() ? '<b>Mute</b> silences a track, <b>Solo</b> plays only that track, and <b>Stop</b> ends its loop at the end of the bar. Swipe sideways on the grid to switch tracks.'
         : '<b>M</b> mutes a track, <b>S</b> (solo) plays only that track, and <b>■</b> stops its loop at the end of the bar.') + ' Great for building up and breaking down a song live.';
     } },
-  { view: 'loops', target: () => inView('.lp-scene')[0] || BB.$('.lp-view .lp-board'), title: 'Try this',
+  { view: 'loops', target: () => V.board, title: 'Try this',
     get text() {
       return 'Launch the first scene, then start loops from the next row one at a time to build up. Mute the drums for a breakdown, then bring them back for a big return.' +
         (BB.isMobile() ? '' : ' Keyboard: arrows move around the grid, <b>Enter</b> starts or stops, <b>Space</b> plays and stops everything.');

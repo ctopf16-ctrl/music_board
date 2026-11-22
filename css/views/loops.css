@@ -193,6 +193,7 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
   .lp-head { gap: 6px 10px; }
   .lp-titles { flex-basis: 100%; }
   .lp-head-actions { width: 100%; justify-content: space-between; }
+  .lp-head-actions .btn { height: 40px; }
   .lp-start { padding: 12px; gap: 10px 12px; }
   .lp-start-art { display: none; }
   .lp-start-actions { width: 100%; }
@@ -256,15 +257,17 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
   .lp-len .lbl, .lp-len .seg { display: none; }
   .lp-len-sel { display: inline-flex; }
   .lp-len-sel select { height: 40px; font-size: 13px; padding: 0 26px 0 10px; }
-  .lp-rename-btn { grid-area: rename; margin: 0; width: 40px; height: 40px; padding: 0; }
+  .lp-tools .btn.lp-rename-btn { grid-area: rename; margin: 0; width: 40px; height: 40px; padding: 0; }
   .lp-rename-btn .btn-label { display: none; }
-  .lp-close { grid-area: close; display: inline-flex; width: 40px; height: 40px; }
+  .lp-tools .btn.lp-close { grid-area: close; display: inline-flex; width: 40px; height: 40px; }
   .lp-close .ico { width: 18px; height: 18px; }
   .lp-acts { grid-area: acts; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 3px; }
   .lp-acts .btn { flex-direction: column; gap: 3px; height: 52px; padding: 4px 0; border-radius: 11px; font-size: 10.5px; font-weight: 600; letter-spacing: -0.01em; min-width: 0; }
   .lp-acts .btn .ico { width: 20px; height: 20px; }
   .lp-acts .btn .btn-label { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   .lp-tools[data-state="empty"] .lp-acts .btn { flex-direction: row; height: 44px; font-size: 14px; gap: 7px; }
+  /* while the floating toolbar shows on this screen, messages pop up above it instead of covering it */
+  body:has(.lp-view:not([hidden]) .lp-tools:not([data-state="none"])) #toasts { bottom: calc(var(--nav-h) + 142px + env(safe-area-inset-bottom, 0px)); }
 }
 
 /* an older Undo toast from this screen is replaced at once */

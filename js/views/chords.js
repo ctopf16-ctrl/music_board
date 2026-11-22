@@ -145,13 +145,13 @@ function placeAt(slot, root, q, audition) {
 }
 function advance(slot) {
   const next = (Math.floor(slot / 4) + 1) * 4;
-  if (next >= slotCount()) { setSel(null); UI.toast('That was the last bar. Press Play to hear your progression!'); }
+  if (next >= slotCount()) { setSel(null); UI.toast('That was the last bar. Press Play to hear your progression!', { replace: 'cp-hint' }); }
   else setSel(next);
 }
 function eraseSel() {
   if (S.sel == null) return;
   const slot = S.sel, scene = BB.state.scene, c = curClip();
-  if (!c || !c.slots[slot]) { UI.toast(slot === 0 || !c ? 'This beat is already empty.' : 'Nothing starts on this beat. The chord before it just keeps playing.'); return; }
+  if (!c || !c.slots[slot]) { UI.toast(slot === 0 || !c ? 'This beat is already empty.' : 'Nothing starts on this beat. The chord before it just keeps playing.', { replace: 'cp-hint' }); return; }
   BB.store.change('Erase chord', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.slots[slot] = null; }, { info: { track: 'chords', scene } });
   S.starter = '';
 }
@@ -167,7 +167,7 @@ function restSel() {
 }
 function clearClip() {
   const c = curClip(), scene = BB.state.scene;
-  if (!c || BB.clipIsEmpty('chords', c)) { UI.toast('There are no chords to clear in this scene yet.'); return; }
+  if (!c || BB.clipIsEmpty('chords', c)) { UI.toast('There are no chords to clear in this scene yet.', { replace: 'cp-hint' }); return; }
   BB.store.change('Clear chords', () => { const cc = BB.store.clip('chords', scene); if (cc) cc.slots = cc.slots.map(() => null); }, { info: { track: 'chords', scene } });
   S.starter = ''; setSel(null);
   UI.toast('Chords cleared.', { action: { label: 'Undo', onClick: () => { const l = BB.store.undo(); if (l) UI.toast('Undid: ' + l); } } });
@@ -198,7 +198,7 @@ function applyStarter(id) {
   S.starter = id; setSel(null); E.starter.update();
   heard(scene);
   const it = starterOptions().find(o => o.id === id);
-  UI.toast('Added ' + (it ? it.label : clip.name) + '. Press Play to hear it.');
+  UI.toast('Added ' + (it ? it.label : clip.name) + '. Press Play to hear it.', { replace: 'cp-starter' });
 }
 
 /* ================= painting ================= */
@@ -597,7 +597,7 @@ function keydown(e) {
   if (e.key === 'Enter') {
     if (S.sel == null) return false;
     if (S.lastPlayed) placeAt(S.sel, S.lastPlayed.root, S.lastPlayed.q, true);
-    else UI.toast('Play a chord pad first, then press Enter to write it here.');
+    else UI.toast('Play a chord pad first, then press Enter to write it here.', { replace: 'cp-hint' });
     return true;
   }
   if (e.key === 'Delete' || e.key === 'Backspace') {

@@ -76,7 +76,10 @@
 #view-song .sb.dragging { z-index: 6; cursor: grabbing; transition: none; }
 #view-song .sb.dragging .sb-card { box-shadow: 0 0 0 1px var(--ink) inset, var(--pop); transform: rotate(-1.2deg) scale(1.02); }
 #view-song .sg-track.is-dragging .sb:not(.dragging) { opacity: .75; }
-#view-song .sg-drop { position: absolute; top: 18px; bottom: 0; left: 0; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--ink); pointer-events: none; z-index: 5; display: none; }
+#view-song .sg-drop { position: absolute; top: 14px; bottom: -4px; left: 0; width: 4px; margin-left: -2px; border-radius: 2px; background: var(--ink); pointer-events: none; z-index: 7; display: none; box-shadow: 0 0 0 2px var(--well); }
+#view-song .sg-drop::before, #view-song .sg-drop::after { content: ""; position: absolute; left: 50%; width: 12px; height: 4px; margin-left: -6px; border-radius: 2px; background: var(--ink); }
+#view-song .sg-drop::before { top: 0; } #view-song .sg-drop::after { bottom: 0; }
+#view-song .sb.dragging .sb-ruler { visibility: hidden; }
 #view-song .sg-drop.on { display: block; }
 body.sg-grabbing, body.sg-grabbing * { cursor: grabbing !important; }
 
@@ -110,6 +113,8 @@ body.sg-grabbing, body.sg-grabbing * { cursor: grabbing !important; }
 #view-song .sg-empty-art i:nth-child(4) { width: 18px; height: 13px; }
 #view-song .sg-empty h4 { font-family: var(--font-display); font-size: 19px; letter-spacing: -0.02em; }
 #view-song .sg-empty-text { margin: 0; max-width: 56ch; font-size: 14.5px; }
+#view-song.is-empty .sg-hint-desk, #view-song.is-empty .sg-hint-phone { display: none; }
+#view-song .sg-empty .sg-pal-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 #view-song .sg-empty-slot { display: grid; gap: 14px; width: 100%; max-width: 860px; text-align: left; margin-top: 4px; }
 
 /* ---------------- add panel: scenes + templates ---------------- */
@@ -159,12 +164,12 @@ body.sg-grabbing, body.sg-grabbing * { cursor: grabbing !important; }
 #view-song .sg-exp-what { font: 500 12px/1.3 var(--font-mono); color: var(--ink-2); }
 #view-song .sg-exp-one { display: grid; gap: 7px; padding-top: 12px; border-top: 1px solid var(--line-2); }
 #view-song .sg-exp-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; min-width: 0; }
-#view-song .sg-exp-ctl .sel { min-width: 0; flex: 1 1 120px; }
+#view-song .sg-exp-ctl .sel { min-width: 0; flex: 1 1 120px; max-width: 260px; }
 #view-song .sg-exp-ctl .sel select { width: 100%; }
 #view-song .sg-progress { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--well); font-size: 13px; color: var(--ink-2); }
-#view-song .sg-meter { position: relative; flex: 0 0 120px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
-#view-song .sg-meter i { position: absolute; inset: 0; border-radius: 3px; background: var(--good); }
-#view-song .sg-progress.indet .sg-meter i { width: 40%; animation: sg-indet 1.1s ease-in-out infinite; }
+#view-song .sg-meter { position: relative; flex: 0 0 140px; height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+#view-song .sg-meter i { position: absolute; inset: 0 auto 0 0; width: calc(var(--f, 0) * 100%); border-radius: 3px; background: var(--good); transition: width .25s ease-out; }
+#view-song .sg-progress.indet .sg-meter i { width: 40%; transition: none; animation: sg-indet 1.1s ease-in-out infinite; }
 @keyframes sg-indet { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 #view-song .sg-prog-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -209,7 +214,8 @@ body.sg-grabbing, body.sg-grabbing * { cursor: grabbing !important; }
   #view-song .sb-play svg { width: 16px; height: 16px; }
   #view-song .sg-addtile { flex: none; width: 100%; height: 50px; margin: 0; display: flex; justify-content: center; gap: 8px; font-size: 14.5px; }
   #view-song .sg-tools, #view-song .sg-playhead, #view-song .sg-drop { display: none !important; }
-  #view-song .sg-pal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-song .sg-pal-grid, #view-song .sg-empty .sg-pal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #view-song .sg-exp-ctl .sel { max-width: none; }
   #view-song .sg-pal { padding: 10px; min-height: 64px; }
   #view-song .sg-tpls { grid-template-columns: minmax(0, 1fr); }
   #view-song .sg-tpl { padding: 11px 12px 12px; }
