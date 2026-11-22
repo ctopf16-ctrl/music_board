@@ -186,9 +186,9 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .seg.sm button { height: 26px; padding: 0 8px; font-size: 12.5px; }
 .seg .ico { width: 16px; height: 16px; display: inline-grid; }
 
-.sel { position: relative; display: inline-flex; max-width: 100%; }
+.sel:has(> select) { position: relative; display: inline-flex; max-width: 100%; }
 .sel select { appearance: none; -webkit-appearance: none; height: 36px; max-width: 100%; padding: 0 30px 0 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--raise); font-weight: 600; font-size: 14px; color: var(--ink); text-overflow: ellipsis; }
-.sel::after { content: ""; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+.sel:has(> select)::after { content: ""; position: absolute; right: 12px; top: 50%; width: 6px; height: 6px; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: translateY(-70%) rotate(45deg); pointer-events: none; }
 .sel.sm select { height: 30px; font-size: 13px; border-radius: 8px; }
 
 .stepper { display: inline-flex; align-items: center; background: var(--raise); border: 1px solid var(--line); border-radius: 10px; height: 36px; position: relative; }

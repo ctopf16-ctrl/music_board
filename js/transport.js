@@ -207,6 +207,7 @@ TR.setMode = function (mode) {
   if (was) TR.play();
 };
 TR.setMetronome = function (on) { TR.metronome = on; BB.emit('transport', { metronome: on }); };
+TR.setLoopSong = function (on) { TR.loopSong = !!on; BB.emit('transport', { loopSong: TR.loopSong }); };
 TR.setRec = function (on) {
   TR.rec = on; TR.recGroup = on ? 'rec-' + Date.now() : null;
   BB.emit('transport', { rec: on });
@@ -413,16 +414,35 @@ BB.renderAudio = async function (opts = {}) {
   const E = BB.createEngine(oac, p);
   E.applyMix(p);
   const t0 = 0.05;
-  for (let abs = 0; abs < total; abs++) {
-    const t = t0 + abs * sd + (abs % 2 ? p.swing * sd * 0.66 : 0);
-    if (abs % 4 === 0) E.pump(t, sd * 4);
-    for (const tr of BB.TRACKS) { const r = resolver(tr.id, abs); if (r) BB.playTrackStep(E, p, tr.id, r.clip, r.pos, t, sd); }
-    if (opts.onProgress && abs % 64 === 0) opts.onProgress(abs / total * 0.5);
+  let done = 0;
+  const scheduleTo = upto => {
+    for (; done < Math.min(upto, total); done++) {
+      const abs = done, t = t0 + abs * sd + (abs % 2 ? p.swing * sd * 0.66 : 0);
+      if (abs % 4 === 0) E.pump(t, sd * 4);
+      for (const tr of BB.TRACKS) { const r = resolver(tr.id, abs); if (r) BB.playTrackStep(E, p, tr.id, r.clip, r.pos, t, sd); }
+    }
+  };
+  /* Create voices just ahead of the render position (suspend/resume) so the audio graph stays small.
+     Building the whole song up front is far slower than real time on long songs. */
+  const CHUNK = 32;
+  if (typeof oac.suspend === 'function') {
+    scheduleTo(CHUNK * 2);
+    for (let k = 1; k * CHUNK < total; k++) {
+      const at = Math.floor((t0 + k * CHUNK * sd) * sr / 128) * 128 / sr;
+      oac.suspend(at).then(() => {
+        scheduleTo((k + 2) * CHUNK);
+        if (opts.onProgress) opts.onProgress(Math.min(0.99, k * CHUNK / total));
+        oac.resume();
+      });
+    }
+  } else {
+    scheduleTo(total);
   }
   const buf = await oac.startRendering();
   if (opts.onProgress) opts.onProgress(1);
   return buf;
 };
+BB.renderAudio.incremental = true;
 /* AudioBuffer -> 16-bit WAV Blob */
 BB.encodeWav = function (buf) {
   const ch = Math.min(2, buf.numberOfChannels), len = buf.length, sr = buf.sampleRate;

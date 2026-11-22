@@ -623,7 +623,7 @@ function mount(el) {
     tip: 'Plays your whole song from the first block. Press again to stop. This also flips the top-bar switch from Loop to Song.' });
   playBtn.id = 'song-play';
   loopTgl = UI.toggle({ label: 'Loop song', key: 'O', icon: I.loop, cls: 'sg-loop', value: () => TR.loopSong,
-    set: v => { TR.loopSong = !!v; BB.emit('transport', { loopSong: TR.loopSong }); },
+    set: v => TR.setLoopSong(v),
     tip: 'When this is on, the song starts again from the beginning after the last block, so it never stops. Handy for practicing over it.' });
   lcdBars = h('b'); lcdTime = h('b');
   lcd = h('div', { class: 'sg-lcd', 'data-tip-title': 'Song length', role: 'status', 'aria-live': 'off' },
