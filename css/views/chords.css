@@ -1,1 +1,204 @@
-/* Chords screen styles */
+/* Beat Board · Chords screen
+   Layout: header, then a grid of three panels. Desktop: chord pads across the top, the progression
+   lane and the melody strip side by side below. Narrower: everything stacks. Every color is a token. */
+.cp-view { --cp-bw: 34px; --cp-bgap: 10px; --cp-lh: 82px; }
+
+/* ---------- header ---------- */
+.cp-head { align-items: center; }
+.cp-titles { display: grid; gap: 2px; min-width: 0; flex: 1 1 260px; }
+.cp-scenes { position: relative; min-width: 0; max-width: 100%; flex: 0 1 auto; display: flex; }
+.cp-scenes > .scenes { min-width: 0; flex: 1 1 auto; }
+.cp-scenes > .hk { top: -6px; right: -6px; }
+
+/* ---------- grid ---------- */
+.cp-grid { display: grid; gap: 12px; min-width: 0; grid-template-columns: minmax(0, 1fr); grid-template-areas: "pads" "lane" "mel"; }
+.cp-pads-panel { grid-area: pads; }
+.cp-lane-panel { grid-area: lane; }
+.cp-mel-panel { grid-area: mel; grid-template-rows: auto 1fr; }
+@media (min-width: 1100px) {
+  .cp-view { --cp-lh: 96px; }
+  .cp-grid { grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr); grid-template-areas: "pads pads" "lane mel"; }
+}
+.cp-view .panel-head h3 { display: inline-flex; align-items: center; gap: 8px; }
+
+/* ---------- pads panel ---------- */
+.cp-ctls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; min-width: 0; }
+.cp-ctl { display: grid; gap: 5px; min-width: 0; max-width: 100%; justify-items: start; }
+.cp-ctl > .lbl { padding-left: 2px; }
+.cp-keypill { color: var(--ink); }
+.cp-ctls-toggle { display: none; }
+.cp-writing { background: var(--ink); color: var(--panel); }
+.cp-writing .ico { width: 13px; height: 13px; display: inline-grid; }
+.cp-writing b { font-weight: 700; }
+
+.cp-pads { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; min-width: 0; }
+.cp-pad {
+  --tint: 15%;
+  position: relative; height: 112px; min-width: 0; margin: 0;
+  display: grid; grid-template-rows: auto 1fr auto; text-align: left;
+  padding: 10px 12px 9px; border: 0; border-radius: 14px; color: var(--ink);
+  background: color-mix(in oklab, var(--c) var(--tint), var(--well));
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.07);
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  transition: background .3s ease-out, box-shadow .3s ease-out, transform .08s;
+}
+.cp-pad.home { --tint: 24%; }
+.cp-pad.borrowed {
+  --tint: 9%;
+  background-image: repeating-linear-gradient(135deg, transparent 0 9px, color-mix(in oklab, var(--c) 14%, transparent) 9px 10px);
+}
+.cp-pad:hover { --tint: 28%; }
+.cp-pad.borrowed:hover { --tint: 20%; }
+.cp-pad.next { box-shadow: inset 0 0 0 2px var(--c), inset 0 -3px 0 rgba(0,0,0,.07); }
+.cp-pad.lit {
+  background: var(--c); color: var(--c-ink); transform: scale(.985); transition: none;
+  box-shadow: 0 0 30px -6px var(--c), inset 0 -3px 0 rgba(0,0,0,.14);
+}
+/* the chord under the playhead */
+.cp-pad.cur::before { content: ""; position: absolute; top: 0; left: 22%; right: 22%; height: 4px; border-radius: 0 0 4px 4px; background: var(--c); }
+.cp-pad.lit.cur::before { background: var(--c-ink); opacity: .5; }
+/* writing mode: pads also write into the lane */
+.cp-pads.placing .cp-pad { outline: 2px dashed color-mix(in oklab, var(--ink) 38%, transparent); outline-offset: -6px; }
+.cp-pads.placing .cp-pad.lit { outline-color: color-mix(in oklab, var(--c-ink) 45%, transparent); }
+
+.cp-pad-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.cp-num { font-family: var(--font-mono); font-size: 12px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cp-kc { flex: none; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 5px; border: 1px solid currentColor; display: inline-grid; place-items: center; font: 700 10.5px/1 var(--font-mono); opacity: .5; }
+.cp-name { align-self: end; min-width: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 2.6vw, 36px); letter-spacing: -0.03em; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-name small, .cp-bname small { font-size: .56em; letter-spacing: -0.01em; margin-left: 1px; }
+.cp-pad-foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 16px; margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-2); white-space: nowrap; min-width: 0; }
+.cp-tag { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cp-pad.borrowed .cp-tag, .cp-pad.home .cp-tag { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; font-weight: 700; }
+.cp-next { display: none; margin-left: auto; color: var(--ink); align-items: center; gap: 5px; }
+.cp-next::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--c); }
+.cp-pad.next .cp-next { display: inline-flex; }
+.cp-pad.lit .cp-num, .cp-pad.lit .cp-pad-foot, .cp-pad.lit .cp-next { color: inherit; }
+.cp-pad.lit .cp-num, .cp-pad.lit .cp-pad-foot { opacity: .75; }
+
+/* ---------- lane panel ---------- */
+.cp-lane-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.cp-bars { display: inline-flex; align-items: center; gap: 6px; }
+.cp-starter select { width: 12.5em; }
+.cp-recpill { color: var(--rec); }
+.cp-recdot { width: 8px; height: 8px; border-radius: 50%; background: var(--rec); display: inline-block; animation: blinkrec 1s steps(1) infinite; }
+
+.cp-place {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0;
+  padding: 8px 8px 8px 10px; border-radius: 12px;
+  background: color-mix(in oklab, var(--c) 20%, var(--raise)); box-shadow: inset 0 0 0 1.5px var(--c);
+}
+.cp-place-ico { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 8px; background: var(--c); color: var(--c-ink); }
+.cp-place-ico svg { width: 16px; height: 16px; }
+.cp-place-text { flex: 1 1 260px; min-width: 0; font-size: 13.5px; }
+.cp-place-keys { color: var(--ink-2); }
+.cp-place-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.cp-lane-wrap { position: relative; min-width: 0; }
+.cp-lane-scroll { position: relative; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 6px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.cp-lane { display: grid; grid-template-rows: auto var(--cp-lh); row-gap: 5px; min-width: min-content; }
+.cp-barlbl { grid-row: 1; padding-left: 6px; font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); white-space: nowrap; }
+.cp-rail { grid-row: 2; border-radius: 10px; background: var(--well); box-shadow: inset 0 0 0 1px var(--line-2); }
+.cp-block {
+  grid-row: 2; z-index: 1; min-width: 0; overflow: hidden; pointer-events: none;
+  margin: 5px 3px 25px; padding: 6px 8px 5px 10px; border-radius: 8px;
+  display: grid; align-content: space-between;
+  background: color-mix(in oklab, var(--c) 30%, var(--raise)); color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--c), 0 1px 2px rgba(0,0,0,.12);
+  transition: background .15s;
+}
+.cp-block.playing { background: var(--c); color: var(--c-ink); box-shadow: inset 3px 0 0 color-mix(in oklab, var(--c-ink) 35%, var(--c)), 0 0 18px -6px var(--c); transition: none; }
+.cp-block.outside { box-shadow: inset 3px 0 0 var(--ink-3), 0 1px 2px rgba(0,0,0,.12); }
+.cp-block.rest { background: transparent; box-shadow: none; border: 1.5px dashed var(--line); padding-left: 8px; }
+.cp-block.fresh { animation: cp-pop .45s ease-out; }
+@keyframes cp-pop { 0% { transform: scale(.85); filter: brightness(1.25); } 60% { transform: scale(1.03); } 100% { transform: none; } }
+.cp-bname { font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -0.025em; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-block[data-span="1"] .cp-bname { font-size: 15px; }
+.cp-block.rest .cp-bname { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+.cp-bnum { font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-block.playing .cp-bnum { color: inherit; opacity: .75; }
+
+.cp-beat {
+  grid-row: 2; z-index: 2; position: relative; min-width: 0; margin: 0; padding: 0 0 5px;
+  display: flex; align-items: flex-end; justify-content: center;
+  border: 0; border-radius: 9px; background: transparent; color: var(--ink-3);
+}
+.cp-beat:hover { box-shadow: inset 0 0 0 1.5px color-mix(in oklab, var(--ink) 30%, transparent); }
+.cp-beat:hover .cp-bn { color: var(--ink); }
+.cp-beat + .cp-beat:not(.down)::before { content: ""; position: absolute; left: 0; bottom: 7px; height: 12px; width: 1px; background: var(--line); }
+.cp-bn { min-width: 18px; height: 16px; padding: 0 4px; border-radius: 5px; font: 700 10px/16px var(--font-mono); text-align: center; }
+.cp-beat.down .cp-bn { color: var(--ink-2); }
+.cp-beat.now .cp-bn { background: var(--c); color: var(--c-ink); }
+.cp-beat.is-sel { background: color-mix(in oklab, var(--ink) 7%, transparent); box-shadow: inset 0 0 0 2px var(--ink); animation: cp-pulse 1.4s ease-in-out infinite; }
+.cp-beat.is-sel .cp-bn { background: var(--ink); color: var(--panel); }
+@keyframes cp-pulse { 50% { box-shadow: inset 0 0 0 2px var(--ink), 0 0 0 4px color-mix(in oklab, var(--ink) 16%, transparent); } }
+.cp-lane-hint { margin-top: -4px; }
+.cp-lane-empty {
+  position: absolute; left: 0; right: 0; top: 26px; height: calc(var(--cp-lh) - 22px); margin: 0; padding: 0 16px;
+  display: grid; place-items: center; text-align: center; font-size: 13px; color: var(--ink-2); pointer-events: none;
+}
+
+/* ---------- melody strip ---------- */
+.cp-mel {
+  display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: center;
+  height: 100%; min-height: 176px; min-width: 0;
+  touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+}
+.cp-mbar {
+  --tint: calc(14% + var(--i) * 1.7%);
+  position: relative; height: calc(100% - var(--i) * 5%); min-height: 64px; min-width: 0; margin: 0;
+  display: grid; grid-template-rows: auto 1fr auto; justify-items: center; align-items: center; padding: 9px 0 8px;
+  border: 0; border-radius: 10px; color: var(--ink);
+  background: color-mix(in oklab, var(--c) var(--tint), var(--well));
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.08);
+  font-family: var(--font-mono); font-weight: 700;
+  touch-action: none; transition: background .25s ease-out, box-shadow .25s ease-out;
+}
+.cp-mbar:hover { --tint: calc(26% + var(--i) * 1.7%); }
+.cp-mbar.lit { background: var(--c); color: var(--c-ink); box-shadow: 0 0 20px -5px var(--c), inset 0 -3px 0 rgba(0,0,0,.14); transition: none; }
+.cp-mnote { font-size: 12.5px; white-space: nowrap; }
+.cp-mdot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .45; }
+.cp-mgap { width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: .18; }
+.cp-mkey { min-width: 18px; height: 18px; padding: 0 4px; border-radius: 5px; border: 1px solid currentColor; display: inline-grid; place-items: center; font-size: 10px; opacity: .5; }
+body:not(.show-keys) .cp-mkey { visibility: hidden; }
+
+/* ---------- phones ---------- */
+@media (max-width: 720px) {
+  .cp-view { --cp-bw: 40px; --cp-bgap: 8px; --cp-lh: 78px; }
+  .cp-head { gap: 8px; }
+  .cp-titles { flex-basis: calc(100% - 120px); }
+  .cp-head .tour-btn { order: 1; }
+  .cp-scenes { order: 2; flex: 1 1 100%; }
+  .cp-ctls-toggle {
+    order: 2; display: flex; justify-content: flex-start; gap: 10px; width: 100%; min-width: 0; height: 44px; padding: 0 12px;
+    background: var(--panel); font-weight: 600;
+  }
+  .cp-ctls-toggle .lbl { flex: none; }
+  .cp-ct-val { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: left; font-size: 13px; color: var(--ink-2); }
+  .cp-ct-chev { flex: none; width: 8px; height: 8px; margin: 0 3px 4px 0; border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2); transform: rotate(45deg); transition: transform .2s; }
+  .ctls-open .cp-ct-chev { transform: rotate(-135deg); margin-bottom: -4px; }
+  .cp-pads-panel:not(.ctls-open) .cp-ctls { display: none; }
+  .cp-pads-panel .panel-head .hint { order: 5; flex-basis: 100%; }
+  .cp-pads-panel .cp-ctls { order: 3; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding-top: 2px; }
+  .cp-ctl { justify-items: stretch; }
+  .cp-ctl .sel, .cp-ctl .sel select { width: 100%; }
+  .cp-ctl .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cp-ctl .seg button { justify-content: center; padding: 0 4px; }
+  .cp-pads { gap: 6px; }
+  .cp-pad { height: 80px; padding: 7px 8px 6px; border-radius: 12px; }
+  .cp-name { font-size: 22px; }
+  .cp-num { font-size: 11px; }
+  .cp-kc { min-width: 16px; height: 16px; padding: 0 3px; font-size: 9.5px; }
+  .cp-pad-foot { font-size: 10px; margin-top: 3px; min-height: 14px; }
+  .cp-pad.borrowed .cp-tag, .cp-pad.home .cp-tag { font-size: 8.5px; letter-spacing: .08em; }
+  .cp-pad.next .cp-tag { display: none; }
+  .cp-next { gap: 4px; }
+  .cp-next::before { width: 5px; height: 5px; }
+  .cp-starter select { width: 10.5em; }
+  .cp-place { padding: 8px; gap: 8px 10px; }
+  .cp-place-text { flex: 1 1 200px; font-size: 13px; }
+  .cp-place-btns { margin-left: auto; }
+  .cp-bname { font-size: 18px; }
+  .cp-mel { min-height: 150px; gap: 4px; }
+  .cp-mbar { border-radius: 8px; min-height: 58px; padding: 8px 0 7px; }
+  .cp-mnote { font-size: 11.5px; }
+}

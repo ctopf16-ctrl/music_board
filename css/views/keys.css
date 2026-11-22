@@ -1,1 +1,162 @@
-/* Keys screen styles */
+/* Beat Board · Keys screen: piano roll + playable piano.
+   Everything is scoped to the Keys view. The root .kx carries the track color class (c-bass, c-melody, c-keys),
+   so var(--c) / var(--c-ink) follow the track being edited. */
+.view[data-view="keys"] .kx { display: grid; gap: 12px; min-width: 0; }
+
+/* ---------- header ---------- */
+.view[data-view="keys"] .kx-head { align-items: baseline; }
+.view[data-view="keys"] .kx-head .tour-btn { align-self: center; }
+.view[data-view="keys"] .kx-context { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; min-width: 0; }
+.view[data-view="keys"] .kx-scenes { position: relative; flex: 0 1 auto; min-width: 0; display: flex; }
+.view[data-view="keys"] .kx-scenes > .scenes { flex: 0 1 auto; }
+.view[data-view="keys"] .kx-narrow { display: none; }
+.view[data-view="keys"] .kx-tracks { flex-wrap: nowrap; }
+.view[data-view="keys"] .kx-tracks button { height: 38px; padding: 0 16px; font-size: 14px; }
+.view[data-view="keys"] .kx-tracks button[aria-pressed="true"] { background: var(--c); color: var(--c-ink); box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+.view[data-view="keys"] .kx-tracks button[aria-pressed="true"] .sw { background: var(--c-ink); }
+
+/* ---------- small shared bits ---------- */
+.view[data-view="keys"] .kx-info { width: 22px; height: 22px; padding: 2px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-3); display: inline-grid; place-items: center; margin-left: -6px; }
+.view[data-view="keys"] .kx-info:hover { color: var(--ink); background: var(--well); }
+.view[data-view="keys"] .kx-info svg { width: 16px; height: 16px; }
+.view[data-view="keys"] .kx-inline { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.view[data-view="keys"] .kx-status { cursor: default; }
+.view[data-view="keys"] .kx-status-text { overflow: hidden; text-overflow: ellipsis; }
+.view[data-view="keys"] .kx-dim { opacity: .5; }
+.view[data-view="keys"] .kx-dim:hover { opacity: .7; }
+.view[data-view="keys"] .sel.sm select { max-width: 190px; }
+
+/* ---------- tools ---------- */
+.view[data-view="keys"] .kx-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; min-width: 0; }
+.view[data-view="keys"] .kx-field { display: grid; gap: 5px; min-width: 0; }
+.view[data-view="keys"] .kx-field > .lbl { padding-left: 3px; font-size: 9.5px; color: var(--ink-3); }
+.view[data-view="keys"] .kx-field-ctl { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.view[data-view="keys"] .kx-tools .seg { flex-wrap: nowrap; }
+.view[data-view="keys"] .kx-octmove { display: inline-flex; gap: 4px; border-radius: 10px; }
+.view[data-view="keys"] .kx-octmove .btn { padding: 0 9px 0 7px; gap: 3px; }
+.view[data-view="keys"] .kx-inkey[aria-pressed="true"] { background: var(--c); border-color: var(--c); color: var(--c-ink); }
+.view[data-view="keys"] .kx-more-wrap { display: none; }
+
+/* ---------- piano roll ---------- */
+.view[data-view="keys"] .kx-rollwrap { position: relative; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background: var(--well); min-width: 0; }
+.view[data-view="keys"] .kx-roll { height: clamp(240px, calc(100vh - 600px), 540px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.view[data-view="keys"] .kx-inner { display: grid; grid-template-columns: var(--kw) minmax(var(--gw), 1fr); grid-template-rows: 22px var(--gh); width: max-content; min-width: 100%; }
+.view[data-view="keys"] .kx-corner { position: sticky; left: 0; top: 0; z-index: 6; background: var(--panel); border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); display: grid; place-items: center; }
+.view[data-view="keys"] .kx-corner .sw { width: 10px; height: 10px; }
+.view[data-view="keys"] .kx-ruler { position: sticky; top: 0; z-index: 5; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+.view[data-view="keys"] .kx-ticks { position: relative; height: 100%; width: var(--gw); background-image: linear-gradient(90deg, var(--line) 0 1px, transparent 1px); background-size: calc(var(--sw) * 4) 6px; background-position: 0 100%; background-repeat: repeat-x; }
+.view[data-view="keys"] .kx-bar { position: absolute; top: 0; bottom: 0; padding-left: 5px; border-left: 1px solid var(--ink-3); font: 700 10px/21px var(--font-mono); color: var(--ink-2); pointer-events: none; }
+
+.view[data-view="keys"] .kx-keycol { position: sticky; left: 0; z-index: 4; display: grid; grid-auto-rows: var(--rh); align-content: start; background: var(--key-w); border-right: 1px solid var(--line); box-shadow: 3px 0 6px -4px rgba(0,0,0,.25); touch-action: pan-x pan-y; user-select: none; -webkit-user-select: none; }
+.view[data-view="keys"] .kx-key { position: relative; display: flex; align-items: center; justify-content: flex-end; padding: 0 7px 0 4px; font: 600 10px/1 var(--font-mono); color: var(--key-w-ink); background: var(--key-w); box-shadow: inset 0 -1px 0 var(--key-w2); cursor: pointer; white-space: nowrap; }
+.view[data-view="keys"] .kx-key.blk { background: var(--key-b); color: var(--key-b-ink); box-shadow: inset 0 -1px 0 rgba(255,255,255,.07); }
+.view[data-view="keys"] .kx-key.out { color: color-mix(in oklab, var(--key-w-ink) 45%, var(--key-w)); }
+.view[data-view="keys"] .kx-key.blk.out { color: color-mix(in oklab, var(--key-b-ink) 45%, var(--key-b)); }
+.view[data-view="keys"] .kx-key.home { font-weight: 800; color: var(--key-w-ink); }
+.view[data-view="keys"] .kx-key.home::before { content: ""; position: absolute; left: 0; top: 2px; bottom: 2px; width: 4px; border-radius: 0 3px 3px 0; background: var(--c); }
+.view[data-view="keys"] .kx-key.oct { box-shadow: inset 0 -1px 0 var(--line); }
+.view[data-view="keys"] .kx-key.kx-play { background: color-mix(in oklab, var(--c) 30%, var(--key-w)); }
+.view[data-view="keys"] .kx-key.blk.kx-play { background: color-mix(in oklab, var(--c) 45%, var(--key-b)); }
+.view[data-view="keys"] .kx-key.lit, .view[data-view="keys"] .kx-key.aud { background: var(--c); color: var(--c-ink); }
+
+.view[data-view="keys"] .kx-grid { position: relative; width: var(--gw); height: var(--gh); touch-action: pan-x pan-y; cursor: crosshair; user-select: none; -webkit-user-select: none; box-shadow: 1px 0 0 var(--ink-3); }
+.view[data-view="keys"] .kx-rows { position: absolute; inset: 0; display: grid; grid-auto-rows: var(--rh); }
+.view[data-view="keys"] .kx-row { background: color-mix(in oklab, var(--raise) 62%, var(--well)); box-shadow: inset 0 -1px 0 var(--line-2); }
+.view[data-view="keys"] .kx-row.out { background: color-mix(in oklab, var(--ink) 3%, var(--well)); }
+.view[data-view="keys"] .kx-row.home { background: color-mix(in oklab, var(--c) 13%, var(--raise)); }
+.view[data-view="keys"] .kx-row.oct { box-shadow: inset 0 -1px 0 var(--line); }
+.view[data-view="keys"] .kx-lines { position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(90deg, color-mix(in oklab, var(--ink-3) 75%, transparent) 0 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 0 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklab, var(--line) 45%, transparent) 0 1px, transparent 1px);
+  background-size: calc(var(--sw) * 16) 100%, calc(var(--sw) * 4) 100%, var(--sw) 100%; }
+.view[data-view="keys"] .kx-notes { position: absolute; inset: 0; }
+
+.view[data-view="keys"] .kx-note { position: absolute; z-index: 1; border-radius: 5px; background: var(--c); opacity: calc(.38 + var(--v, .8) * .62);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.16), inset 0 1px 0 rgba(255,255,255,.22), 0 1px 2px rgba(0,0,0,.22);
+  color: var(--c-ink); font: 700 9.5px/1 var(--font-mono); display: flex; align-items: center; padding: 0 9px 0 5px; overflow: hidden; white-space: nowrap;
+  cursor: grab; touch-action: none; transition: filter .08s; }
+.view[data-view="keys"] .kx-nn { pointer-events: none; opacity: .92; }
+.view[data-view="keys"] .kx-note .rz { position: absolute; top: 0; right: 0; bottom: 0; width: 9px; cursor: ew-resize; }
+.view[data-view="keys"] .kx-note .rz::after { content: ""; position: absolute; right: 3px; top: 26%; bottom: 26%; width: 2px; border-radius: 1px; background: currentColor; opacity: .45; }
+.view[data-view="keys"] .kx-note.sel { opacity: 1; z-index: 2; box-shadow: 0 0 0 2px var(--ink), 0 4px 10px -2px rgba(0,0,0,.35); }
+.view[data-view="keys"] .kx-note.on { filter: brightness(1.22) saturate(1.1); box-shadow: inset 0 0 0 1px rgba(0,0,0,.16), 0 0 14px -2px var(--c); }
+.view[data-view="keys"] .kx-note.sel.on { box-shadow: 0 0 0 2px var(--ink), 0 0 14px -2px var(--c); }
+.view[data-view="keys"] .kx-dragging .kx-grid, .view[data-view="keys"] .kx-dragging .kx-note { cursor: grabbing; }
+.view[data-view="keys"] .kx-erasing .kx-grid { cursor: default; }
+.view[data-view="keys"] .kx-erasing .kx-note { cursor: pointer; }
+.view[data-view="keys"] .kx-erasing .kx-note .rz { cursor: pointer; }
+.view[data-view="keys"] .kx-erasing .kx-note:hover { box-shadow: 0 0 0 2px var(--rec); opacity: .55; }
+.view[data-view="keys"] .kx-ghost { position: absolute; display: none; pointer-events: none; z-index: 0; border-radius: 5px;
+  border: 1.5px dashed color-mix(in oklab, var(--c) 80%, var(--ink)); background: color-mix(in oklab, var(--c) 16%, transparent); }
+.view[data-view="keys"] .kx-ph { position: absolute; top: 0; bottom: 0; left: 0; width: 2px; margin-left: -1px; z-index: 3; display: none; pointer-events: none; background: var(--ink); opacity: .6; }
+.view[data-view="keys"] .kx-del { position: absolute; z-index: 7; width: 36px; height: 36px; padding: 8px; border: 0; border-radius: 50%; background: var(--rec); color: var(--rec-ink); box-shadow: var(--pop); display: grid; place-items: center; }
+.view[data-view="keys"] .kx-del svg { width: 100%; height: 100%; }
+
+.view[data-view="keys"] .kx-empty { position: absolute; left: var(--kw, 54px); right: 0; top: 22px; bottom: 0; z-index: 5; display: grid; place-items: center; padding: 12px; pointer-events: none; }
+.view[data-view="keys"] .kx-empty > div { display: grid; gap: 3px; max-width: 360px; padding: 12px 16px; border-radius: 12px; text-align: center; font-size: 13.5px; color: var(--ink-2);
+  background: color-mix(in oklab, var(--panel) 92%, transparent); border: 1.5px dashed var(--line); box-shadow: var(--pop); }
+.view[data-view="keys"] .kx-empty b { color: var(--ink); font-size: 14.5px; }
+
+/* ---------- piano ---------- */
+.view[data-view="keys"] .kx-piano { height: 144px; }
+.view[data-view="keys"] .kx-piano .pkey { cursor: pointer; }
+.view[data-view="keys"] .kx-piano .klet, .view[data-view="keys"] .kx-piano .kname { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--font-mono); pointer-events: none; }
+.view[data-view="keys"] .kx-piano .klet { display: none; bottom: 26px; font-size: 11px; font-weight: 700; color: var(--key-w-ink); }
+body.show-keys .view[data-view="keys"] .kx-piano .klet { display: block; }
+.view[data-view="keys"] .kx-piano .black .klet { bottom: 17px; font-size: 10px; color: var(--key-b-ink); }
+.view[data-view="keys"] .kx-piano .kname { top: calc(60% + 7px); font-size: 10px; font-weight: 500; color: var(--key-w-ink); opacity: .8; }
+.view[data-view="keys"] .kx-piano .pkey.inkey::after { content: ""; position: absolute; left: 50%; bottom: 12px; width: 6px; height: 6px; margin-left: -3px; border-radius: 50%; background: var(--key-w-ink); opacity: .5; }
+.view[data-view="keys"] .kx-piano .pkey.black.inkey::after { bottom: 8px; background: var(--key-b-ink); }
+.view[data-view="keys"] .kx-piano .pkey.root::after { width: 10px; height: 10px; margin-left: -5px; bottom: 10px; opacity: 1; background: var(--c); }
+.view[data-view="keys"] .kx-piano .pkey.black.root::after { bottom: 6px; }
+.view[data-view="keys"] .kx-piano .pkey.white.kx-play:not(.lit) { background: linear-gradient(180deg, color-mix(in oklab, var(--c) 30%, var(--key-w2)), color-mix(in oklab, var(--c) 30%, var(--key-w)) 16%); }
+.view[data-view="keys"] .kx-piano .pkey.black.kx-play:not(.lit) { background: color-mix(in oklab, var(--c) 50%, var(--key-b)); }
+.view[data-view="keys"] .kx-piano .pkey.lit { box-shadow: inset 0 -6px 0 color-mix(in oklab, var(--c) 70%, black), 0 0 20px -6px var(--c); }
+.view[data-view="keys"] .kx-piano .pkey.lit .klet, .view[data-view="keys"] .kx-piano .pkey.lit .kname { color: var(--c-ink); opacity: 1; }
+.view[data-view="keys"] .kx-piano .pkey.lit::after { background: var(--c-ink); opacity: .9; }
+.view[data-view="keys"] .kx-keyhint { white-space: nowrap; }
+.view[data-view="keys"] .kx-hint { display: flex; align-items: center; gap: 8px; }
+.view[data-view="keys"] .kx-recdot { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); flex: none; }
+
+/* ---------- phones ---------- */
+@media (max-width: 720px) {
+  .view[data-view="keys"] .kx { gap: 10px; }
+  .view[data-view="keys"] .kx-desk { display: none; }
+  .view[data-view="keys"] .kx-head { align-items: center; }
+  .view[data-view="keys"] .kx-head .view-sub { order: 5; flex-basis: 100%; }
+  .view[data-view="keys"] .kx-tracks { display: flex; width: 100%; }
+  .view[data-view="keys"] .kx-tracks button { flex: 1 1 0; justify-content: center; height: 40px; padding: 0 8px; }
+  .view[data-view="keys"] .kx-scenes { flex-basis: 100%; }
+  .view[data-view="keys"] .kx-tools .kx-field > .lbl { display: none; }
+  .view[data-view="keys"] .kx-tools.open .kx-secondary > .lbl { display: block; }
+  .view[data-view="keys"] .kx-wide { display: none; }
+  .view[data-view="keys"] .kx-narrow { display: inline; }
+  .view[data-view="keys"] .kx-f-len { order: 3; flex-basis: 100%; }
+  .view[data-view="keys"] .kx-more-wrap { order: 2; }
+  .view[data-view="keys"] .kx-secondary { order: 4; }
+  .view[data-view="keys"] .kx-editor-head .kx-inline { flex: 1 1 100%; }
+  .view[data-view="keys"] .kx-editor-head .kx-starter, .view[data-view="keys"] .kx-editor-head .kx-starter select { flex: 1 1 auto; width: 100%; max-width: none; }
+  .view[data-view="keys"] .kx-tools { gap: 8px 10px; }
+  .view[data-view="keys"] .kx-tools .seg.sm button { height: 36px; padding: 0 9px; font-size: 13px; }
+  .view[data-view="keys"] .kx-tools .btn.sm { height: 40px; }
+  .view[data-view="keys"] .kx-f-len .seg { width: 100%; }
+  .view[data-view="keys"] .kx-f-len .seg button { flex: 1 1 0; justify-content: center; padding: 0 4px; }
+  .view[data-view="keys"] .kx-secondary { display: none; }
+  .view[data-view="keys"] .kx-tools.open .kx-secondary { display: grid; }
+  .view[data-view="keys"] .kx-more-wrap { display: flex; margin-left: auto; }
+  .view[data-view="keys"] .kx-roll { height: clamp(230px, 46vh, 420px); }
+  .view[data-view="keys"] .kx-note { font-size: 10px; }
+  .view[data-view="keys"] .kx-note .rz { width: 14px; }
+  .view[data-view="keys"] .kx-del { width: 42px; height: 42px; padding: 10px; }
+  .view[data-view="keys"] .kx-key { padding-right: 5px; }
+  .view[data-view="keys"] .kx-piano { height: 170px; }
+  .view[data-view="keys"] .kx-piano .kname { font-size: 11px; }
+  .view[data-view="keys"] .kx-piano-head .kx-inline { flex: 0 1 auto; }
+  .view[data-view="keys"] .kx-piano-head .stepper { height: 40px; }
+  .view[data-view="keys"] .kx-piano-head .stepper-btn { width: 40px; }
+  .view[data-view="keys"] .kx-info { width: 40px; height: 40px; margin: -9px -8px -9px -14px; }
+  .view[data-view="keys"] .sel.sm select { height: 40px; font-size: 14px; }
+  .view[data-view="keys"] .kx-head .tour-btn { height: 40px; }
+}
