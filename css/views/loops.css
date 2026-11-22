@@ -275,7 +275,7 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
 
 /* an older Undo toast from this screen is replaced at once */
 .toast.lp-undo.lp-stale { display: none; }
-@media (max-width: 400px) {
+@media (max-width: 385px) {
   .lp-acts .btn .btn-label[data-short] { font-size: 0; }
   .lp-acts .btn .btn-label[data-short]::after { content: attr(data-short); font-size: 10.5px; }
 }
