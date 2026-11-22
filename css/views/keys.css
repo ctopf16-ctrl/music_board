@@ -156,6 +156,7 @@ body.show-keys .view[data-view="keys"] .kx-piano .klet { display: block; }
   .view[data-view="keys"] .kx-piano-head .kx-inline { flex: 0 1 auto; }
   .view[data-view="keys"] .kx-piano-head .stepper { height: 40px; }
   .view[data-view="keys"] .kx-piano-head .stepper-btn { width: 40px; }
+  .view[data-view="keys"] .kx.kx-touring { padding-bottom: 48vh; }
   .view[data-view="keys"] .kx-info { width: 40px; height: 40px; margin: -9px -8px -9px -14px; }
   .view[data-view="keys"] .sel.sm select { height: 40px; font-size: 14px; }
   .view[data-view="keys"] .kx-head .tour-btn { height: 40px; }

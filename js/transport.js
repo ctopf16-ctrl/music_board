@@ -281,8 +281,10 @@ TR.recTarget = function (trackId) {
   }
   let L = TR.launched[trackId];
   if (!L || !BB.store.clip(trackId, L.scene)) {
-    const scene = BB.state.scene;
-    if (!BB.store.clip(trackId, scene)) BB.store.change('Record', () => BB.store.ensureClip(trackId, scene), { group: TR.recGroup, info: { track: trackId, scene } });
+    const scene = BB.state.scene, p = BB.store.p;
+    const hasAny = BB.TRACKS.some(t => p.clips[t.id][scene] && !BB.clipIsEmpty(t.id, p.clips[t.id][scene]));
+    const bars = hasAny ? BB.sceneLength(p, scene) / 16 : (trackId === 'drums' ? 1 : trackId === 'chords' ? 4 : 2);
+    if (!BB.store.clip(trackId, scene)) BB.store.change('Record', () => BB.store.ensureClip(trackId, scene, { bars }), { group: TR.recGroup, info: { track: trackId, scene } });
     L = TR.launched[trackId] = { scene, start: ns.abs - (((ns.abs % 16) + 16) % 16) };
     delete TR.queued[trackId];
     BB.emit('launch', {});

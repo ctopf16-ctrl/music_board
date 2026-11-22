@@ -89,6 +89,12 @@ function audition(m, steps = 2, t = track()) { BB.preview.note(t, m, 0.8, clamp(
 function launchIfPlaying(t, sc) { if (TR.playing && TR.mode === 'loop' && !TR.isLaunched(t, sc) && BB.store.clip(t, sc)) TR.launchClip(t, sc); }
 const undoToast = text => UI.toast(text, { action: { label: 'Undo', onClick: () => { const l = BB.store.undo(); if (l) UI.toast('Undid: ' + l); } }, ms: 4200 });
 const tip = (text, title) => ({ 'data-tip': text, 'data-tip-title': title });
+let infoTimer = 0;
+function infoButton(label, text, title) {
+  return h('button', Object.assign({ class: 'kx-info', 'aria-label': label, html: ICON.info, onclick: e => {
+    const el = e.currentTarget; BB.tooltip.show(el); clearTimeout(infoTimer); infoTimer = setTimeout(() => BB.tooltip.hide(), 5000);
+  } }, tip(text, title)));
+}
 const field = (label, cls, ...kids) => h('div', 'kx-field' + (cls ? ' ' + cls : ''), h('span', 'lbl', label), h('div', 'kx-field-ctl', kids));
 /* Native selects keep focus after a mouse pick, which would swallow the piano letters. Let go of it. */
 function releaseFocusAfterPick(selWrap) {
@@ -138,8 +144,8 @@ function mount(el) {
   });
   R.starter.classList.add('kx-starter');
   releaseFocusAfterPick(R.starter);
-  const editorInfo = h('button', Object.assign({ class: 'kx-info', 'aria-label': 'How to edit notes', html: ICON.info },
-    tip('Click an empty spot to add a note. Drag a note to move it, drag its right edge to make it longer. Double-click or right-click a note to delete it. On a phone: tap to add, tap a note to get a delete button. Selected notes move with the arrow keys; Delete removes them.', 'Drawing notes')));
+  const editorInfo = infoButton('How to edit notes',
+    'Click an empty spot to add a note. Drag a note to move it, drag its right edge to make it longer. Double-click or right-click a note to delete it. On a phone: tap to add, tap a note to get a delete button. A selected note moves with the arrow keys, and Delete removes it.', 'Drawing notes');
   const editorHead = h('div', 'panel-head kx-editor-head', h('h3', null, 'Note editor'), editorInfo, R.status, h('span', 'grow'),
     h('div', 'kx-inline', h('span', 'lbl', 'Starter'), R.starter));
 
@@ -218,8 +224,8 @@ function mount(el) {
     tip: 'Which notes the piano and your computer keys play. Lower numbers sound deeper, higher ones brighter. Shortcut: Z and X.',
     value: () => octave(), set: v => setOctave(v),
   });
-  const pianoInfo = h('button', Object.assign({ class: 'kx-info', 'aria-label': 'About the piano', html: ICON.info },
-    tip('Click, tap or slide across the keys to play. On a computer, the letters on the keys play them too. Keys with a dot are in your song’s key; the big dot is the home note.', 'Piano')));
+  const pianoInfo = infoButton('About the piano',
+    'Click, tap or slide across the keys to play. On a computer, the letters on the keys play them too. Keys with a dot are in your song’s key; the big dot is the home note. Turn on Record to add what you play to the loop.', 'Piano');
   R.piano = h('div', { class: 'pkeys kx-piano', role: 'group', 'aria-label': 'Piano. Play it with A W S E D F T G Y H U J K on your keyboard. Z and X change the octave.' });
   const pianoHead = h('div', 'panel-head kx-piano-head',
     h('h3', null, 'Piano'), pianoInfo,
@@ -291,7 +297,7 @@ function syncHeader() {
   if (R.starter.dataset.track !== t) { R.starter.dataset.track = t; R.starter.refill(); } else R.starter.update();
   R.tool.update(); R.len.update(); R.inKey.update(); R.bars.update(); R.oct.update(); R.moreBtn.update();
   const sceneName = p.scenes[scene()].name;
-  R.status.querySelector('.kx-status-text').textContent = sceneName + ' · ' + plural(bars(), 'bar') + ' · ' + (n ? plural(n, 'note') : 'empty');
+  syncStatusOnly();
   R.status.setAttribute('data-tip', 'You are editing the ' + tr.name + ' part of scene ' + (scene() + 1) + ' (' + sceneName + '). Pick another scene above to edit that one.');
   R.status.setAttribute('data-tip-title', tr.name + ' in ' + sceneName);
   for (const b of [R.octDown, R.octUp, R.quant, R.clear]) { b.classList.toggle('kx-dim', !n); b.setAttribute('aria-disabled', !n); }
@@ -373,7 +379,8 @@ function syncStatusOnly() {
 
 /* Scroll the roll so the notes (or the middle of the track's range) are in view */
 function autoScroll() {
-  const c = clip(), rows = S.rows; if (!rows.length || !R.roll.clientHeight) return;
+  const c = clip(), rows = S.rows;
+  if (!rows.length || !R.roll.clientHeight) { S.ctx = ''; return; } // not visible yet: try again on the next render
   let mid, firstS = 0;
   const idx = c ? c.notes.map(n => rows.indexOf(n.m)).filter(i => i >= 0) : [];
   if (idx.length) { mid = (Math.min(...idx) + Math.max(...idx)) / 2; firstS = Math.min(...c.notes.map(n => n.s)); }
@@ -401,6 +408,10 @@ function renderPiano() {
   if (!S.root) return;
   const t = track(), p = BB.store.p, base = 12 * (octave() + 1);
   const octs = S.octs, count = octs * 12 + 1, nW = octs * 7 + 1, bw = 100 / nW * 0.62;
+  /* Rebuild only when the keys really change: swapping elements under a held finger would retrigger notes */
+  const sig = [t, base, octs, p.key, p.mode].join('|');
+  if (sig === S.pianoSig) { paintSounding(); return; }
+  S.pianoSig = sig;
   R.piano.innerHTML = '';
   let wi = 0;
   for (let i = 0; i < count; i++) {
@@ -658,6 +669,13 @@ function clearClip() {
   S.sel = null; S.delShown = false;
   undoToast('Cleared the ' + BB.TRACK[t].name + ' part in ' + BB.store.p.scenes[sc].name + '.');
 }
+/* Recording into an empty scene makes a 2-bar clip; match the length the editor was showing instead
+   (same undo step as the take). */
+function fixRecordedLength() {
+  const t = track(), sc = scene(), c = clip(), want = S.pendingBars[ckey()] || defaultBars();
+  if (!c || c.notes.length || c.bars === want) return;
+  BB.store.change('Record', p => { BB.resizeClip(t, p.clips[t][sc], want); }, { group: TR.recGroup, info: { track: t, scene: sc } });
+}
 function starterValue() {
   const id = S.starter[ckey()], c = clip();
   if (!id || !c) return '';
@@ -771,23 +789,34 @@ function releaseKeys() { for (const v of S.keyHeld.values()) TR.noteOff(v.track,
 
 /* ================= tutorial ================= */
 const $v = sel => BB.$('.view[data-view="keys"] ' + sel);
+/* On phones the tour card sits over the bottom of the screen, so the piano (last on the page) could never
+   scroll above it. Give the page extra room below while this tour runs. */
+function tourRoom() {
+  if (!S.root) return;
+  S.root.classList.add('kx-touring');
+  clearInterval(S.tourIv);
+  S.tourIv = setInterval(() => {
+    const A = BB.tutorial.active;
+    if (!A || A.id !== VIEW) { S.root.classList.remove('kx-touring'); clearInterval(S.tourIv); }
+  }, 400);
+}
 const mobileText = (desk, phone) => () => (BB.isMobile() ? phone : desk);
 const tutorial = [
-  { view: VIEW, target: () => $v('.kx-tracks'), title: 'Three note tracks',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-tracks'), title: 'Three note tracks',
     get text() { return '<b>Bass</b> plays the low notes that hold the song together. <b>Melody</b> is the tune people hum. <b>Keys</b> adds extra parts like arpeggios and riffs. Pick one here; everything below edits it, in the scene you pick next to it.'; } },
-  { view: VIEW, target: () => $v('.kx-piano'), title: 'Play the piano',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-piano'), title: 'Play the piano',
     get text() { return mobileText('Click or slide across the keys. Your computer keyboard works too: <b>A S D F G H J K</b> are white keys and <b>W E T Y U O P</b> are black keys. <b>Z</b> and <b>X</b> move down or up an octave.', 'Tap the keys, or press and slide across them. The <b>Octave</b> buttons above the keys move the piano lower or higher.')(); } },
-  { view: VIEW, target: () => $v('.kx-piano .pkey.root') || $v('.kx-piano'), title: 'Dots mean "in key"',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-piano .pkey.root') || $v('.kx-piano'), title: 'Dots mean "in key"',
     text: 'Keys with a dot belong to your song’s key, so they always sound good together. The <b>big dot</b> is the home note: melodies love to start and end there.' },
-  { view: VIEW, target: () => $v('.kx-rollwrap'), title: 'Draw notes',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-rollwrap'), title: 'Draw notes',
     get text() { return mobileText('Each row is a note and each column is a step in time. <b>Click</b> an empty spot to add a note, <b>drag</b> a note to move it, and drag its <b>right edge</b> to make it longer. <b>Double-click</b> or right-click a note to delete it.', 'Each row is a note and each column is a step in time. <b>Tap</b> an empty spot to add a note and <b>drag</b> a note to move it. Tap a note to get a <b>delete</b> button.')(); } },
-  { view: VIEW, target: () => $v('.kx-f-len'), title: 'Note length',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-f-len'), title: 'Note length',
     text: 'New notes get this length. <b>1/8</b> is a good start. <b>1/16</b> is quick and bouncy; <b>1 bar</b> is a long, held note. Notes also snap to this grid.' },
-  { view: VIEW, target: () => $v('.kx-inkey'), title: 'Only notes in key',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-inkey'), title: 'Only notes in key',
     text: 'With this on, the grid only shows notes from your song’s key, so you can’t hit a wrong note. Turn it off to see all 12 notes; the shaded rows are outside the key.' },
-  { view: VIEW, target: () => $v('.kx-hint'), title: 'Record what you play',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-hint'), title: 'Record what you play',
     get text() { return 'Turn on <b>Record</b>' + (BB.isMobile() ? '' : ' (<b>R</b>)') + ' at the top, then play. Your notes land in time with the beat and keep looping. Not happy with a take? <b>Undo</b> removes it.'; } },
-  { view: VIEW, target: () => $v('.kx-starter'), title: 'Try this',
+  { view: VIEW, before: tourRoom, target: () => $v('.kx-starter'), title: 'Try this',
     text: 'Pick a <b>Starter part</b>, press <b>Play</b>, then drag a few notes up or down to make it your own. Then switch to <b>Bass</b> and do the same. You just wrote a song part!' },
 ];
 
@@ -798,6 +827,7 @@ BB.views.register({
   render(evt = {}) {
     if (!S.root) return;
     if (evt.track && evt.track !== track() && !evt.all) return; // another track changed
+    if (evt.label === 'Record' && evt.scene === scene()) fixRecordedLength();
     renderAll();
   },
   show() { renderAll(); },

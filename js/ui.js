@@ -193,7 +193,11 @@ UI.select = function (o) {
   };
   fill();
   const el = h('span', Object.assign({ class: 'sel' + (o.small ? ' sm' : '') }, tipAttrs(o, o.label)), sel);
-  sel.addEventListener('change', () => o.set(sel.value));
+  /* after a mouse/touch pick, let go of focus so keyboard shortcuts work again */
+  let byPointer = false;
+  sel.addEventListener('pointerdown', () => { byPointer = true; });
+  sel.addEventListener('change', () => { o.set(sel.value); if (byPointer) { byPointer = false; sel.blur(); } });
+  sel.addEventListener('blur', () => { byPointer = false; });
   const opts = () => Array.from(sel.options);
   const update = () => { const v = String(o.value()); if (sel.value !== v) sel.value = v; };
   const adjust = dir => { const os = opts(), i = os.findIndex(x => x.value === sel.value); const n = os[(i + dir + os.length) % os.length]; o.set(n.value); update(); };
@@ -253,7 +257,7 @@ UI.scenePicker = function (o = {}) {
   });
   const pick = i => {
     BB.setState({ scene: i });
-    if (BB.transport.playing && BB.transport.mode === 'loop') BB.transport.launchScene(i);
+    if (BB.transport.mode === 'loop') BB.transport.launchScene(i);
     update();
   };
   const update = () => {
@@ -420,6 +424,7 @@ Tour.start = function (id, i = 0) {
   const card = h('div', { class: 'tour-card', role: 'dialog', 'aria-live': 'polite', 'aria-label': def.title });
   Tour.active.shade = shade; Tour.active.card = card;
   document.body.append(shade, card);
+  document.body.classList.add('touring');
   Tour.show();
 };
 Tour.show = function () {
@@ -471,7 +476,7 @@ Tour.go = function (d) {
   if (n >= A.def.steps.length) { const done = A.def.onDone; Tour.stop(); if (done) done(); return; }
   A.i = clamp(n, 0, A.def.steps.length - 1); Tour.show();
 };
-Tour.stop = function () { const A = Tour.active; if (!A) return; A.shade.remove(); A.card.remove(); Tour.active = null; };
+Tour.stop = function () { const A = Tour.active; if (!A) return; A.shade.remove(); A.card.remove(); Tour.active = null; document.body.classList.remove('touring'); };
 Tour.key = function (e) {
   if (!Tour.active) return false;
   if (e.key === 'Escape') { Tour.stop(); return true; }
