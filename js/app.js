@@ -356,9 +356,10 @@ function boot() {
   BB.on('step', e => { const v = BB.views.current(); if (v && v.step) try { v.step(e); } catch (err) { console.error(err); } });
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
+  /* Sound can only start from a tap or key press. Phones count the end of a tap, not pointerdown, so listen to both
+     (pointerdown still builds the audio engine early, so the first pad hit is ready). */
   const unlock = () => { BB.audio.init(); };
-  document.addEventListener('pointerdown', unlock, { capture: true });
-  document.addEventListener('keydown', unlock, { capture: true });
+  ['pointerdown', 'pointerup', 'touchend', 'click', 'keydown'].forEach(t => document.addEventListener(t, unlock, { capture: true, passive: true }));
   window.addEventListener('blur', () => TR.allNotesOff());
   document.addEventListener('visibilitychange', () => { if (document.hidden) TR.allNotesOff(); });
   const hash = (location.hash || '').slice(1);

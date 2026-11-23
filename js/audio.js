@@ -313,18 +313,53 @@ BB.createEngine = function (ac, project) {
 };
 
 /* ---------------- live audio (one per page) ---------------- */
+/* Phones need extra care before they make a sound:
+   1. Sound may only start while a real tap or key press is being handled. On touch screens browsers count the END
+      of a tap (touchend, pointerup, click), not pointerdown, so app.js calls init() on all of them, and wake()
+      resumes the context and plays a silent sample inside that tap.
+   2. iPhones mute Web Audio when the ring/silent switch is on. Asking for "playback" audio (navigator.audioSession,
+      iOS 17+) makes the page play like a music app. Older iPhones get the same result from a silent looping <audio>.
+   3. iOS pauses ("interrupts") the context for calls or when you switch apps. The next tap resumes it. */
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+let silentTag = null;
+const quiet = p => { if (p && p.catch) p.catch(() => { /* not inside a tap yet, the next one retries */ }); };
+function askForPlayback(ac) {
+  const s = navigator.audioSession;
+  if (s) { try { if (s.type !== 'playback') s.type = 'playback'; } catch (e) { /* not allowed here */ } return; }
+  if (!isIOS || !ac || !window.Audio) return;
+  if (!silentTag) {
+    silentTag = new Audio(URL.createObjectURL(BB.encodeWav(ac.createBuffer(1, Math.round(ac.sampleRate / 4), ac.sampleRate))));
+    silentTag.loop = true; silentTag.preload = 'auto'; silentTag.disableRemotePlayback = true;
+    silentTag.setAttribute('x-webkit-airplay', 'deny'); silentTag.setAttribute('playsinline', '');
+  }
+  if (silentTag.paused && !document.hidden) { try { quiet(silentTag.play()); } catch (e) { /* noop */ } }
+}
+function wake(ac) {
+  askForPlayback(ac);
+  if (ac.state === 'running') return;
+  try { quiet(ac.resume()); } catch (e) { /* noop */ }
+  try { const s = ac.createBufferSource(); s.buffer = ac.createBuffer(1, 1, ac.sampleRate); s.connect(ac.destination); s.start(0); } catch (e) { /* noop */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { if (silentTag) silentTag.pause(); return; }
+  if (BB.audio.ctx && BB.audio.ctx.state !== 'running') { try { quiet(BB.audio.ctx.resume()); } catch (e) { /* noop */ } }
+});
+
 BB.audio = {
   ctx: null, E: null,
   /* Call from any user gesture. Returns false if the browser has no Web Audio. */
   init() {
     const A = BB.audio;
-    if (A.ctx) { if (A.ctx.state !== 'running') A.ctx.resume(); return true; }
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) { BB.emit('audio', { error: 'This browser can’t play sound. Try Chrome, Edge, Firefox or Safari.' }); return false; }
-    A.ctx = new AC({ latencyHint: 'interactive' });
-    A.E = BB.createEngine(A.ctx, BB.store.p);
-    A.ctx.onstatechange = () => BB.emit('audio', { state: A.ctx.state });
-    BB.emit('audio', { state: A.ctx.state });
+    if (!A.ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { BB.emit('audio', { error: 'This browser can’t play sound. Try Chrome, Edge, Firefox or Safari.' }); return false; }
+      askForPlayback(null);
+      A.ctx = new AC({ latencyHint: 'interactive' });
+      A.E = BB.createEngine(A.ctx, BB.store.p);
+      A.ctx.onstatechange = () => BB.emit('audio', { state: A.ctx.state });
+      BB.emit('audio', { state: A.ctx.state });
+    }
+    wake(A.ctx);
     return true;
   },
   get now() { return BB.audio.ctx ? BB.audio.ctx.currentTime : 0; },
