@@ -157,6 +157,7 @@ function buildViews() {
 app.setView = function (id) {
   const def = BB.views.byId[id]; if (!def) return;
   const prev = BB.views.byId[BB.state.view];
+  if (UI.ws) UI.ws.close({ keepHistory: true }); // a step grid or pads area open on the old screen
   if (prev && prev.id !== id && prev.hide) try { prev.hide(); } catch (e) { console.error(e); }
   TR.allNotesOff();
   C.clear();
@@ -205,7 +206,7 @@ function onKeyDown(e) {
   if (code === 'NumpadAdd' || code === 'NumpadSubtract') { e.preventDefault(); setBpm(BB.store.p.bpm + (code === 'NumpadAdd' ? 1 : -1) * (e.shiftKey ? 5 : 1)); UI.toast('Tempo ' + BB.store.p.bpm + ' BPM', { ms: 900 }); return; }
   if (code === 'NumpadMultiply') { e.preventDefault(); TR.setMetronome(!TR.metronome); return; }
   if (code === 'NumpadDivide') { e.preventDefault(); TR.setMode(TR.mode === 'loop' ? 'song' : 'loop'); return; }
-  if (e.key === 'Escape') { if (C.sel) C.clear(); else if (view && view.keydown && view.keydown(e)) e.preventDefault(); else if (TR.playing) TR.stop(); return; }
+  if (e.key === 'Escape') { if (C.sel) C.clear(); else if (view && view.keydown && view.keydown(e)) e.preventDefault(); else if (UI.ws) UI.ws.close(); else if (TR.playing) TR.stop(); return; }
   /* arrows: the picked control first, then the screen, then pick something */
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
     const dir = e.key === 'ArrowRight' ? 1 : -1;
@@ -309,7 +310,7 @@ function openHelp() {
         sc(['←', '→'], 'Change the picked control. Hold Shift to move faster.'),
         sc(['↑', '↓'], 'Pick the previous / next control'),
         sc(['Enter'], 'Press the picked button'),
-        sc(['Esc'], 'Let go of the picked control (press again to stop playback)'),
+        sc(['Esc'], 'Let go of the picked control. Press again to close a step grid, note editor or pads area, then again to stop playback.'),
         sc(['[', ']'], 'Previous / next screen'),
         sc(['Ctrl Z', 'Ctrl ⇧ Z'], 'Undo / redo'),
         sc(['Ctrl S'], 'Save in this browser'),
@@ -370,6 +371,8 @@ function boot() {
   window.matchMedia('(max-width: 720px)').addEventListener('change', applyKeysVisible);
   readColors();
   BB.on('change', routeChange);
+  /* Back after a workspace closed by switching screens: follow the address back to that screen */
+  BB.on('popstate', () => { const id = (location.hash || '').slice(1); if (BB.views.byId[id] && id !== BB.state.view) app.setView(id); });
   BB.on('step', e => { const v = BB.views.current(); if (v && v.step) try { v.step(e); } catch (err) { console.error(err); } });
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);

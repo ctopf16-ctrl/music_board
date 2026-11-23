@@ -1,6 +1,9 @@
 /* Beat Board · Chords screen
    Chord pads that are always in key (with "good next" hints), a progression lane of boxes that edits
    the scene's chord clip, a rhythm section (how often each chord strikes), and a scale-locked melody strip.
+   Layout: the screen itself holds the sound (instrument, flavor, volume and effects) and two cards. Each card
+   opens a full-screen workspace: the progression editor (lane + pads, and the rhythm) and a play area
+   (pads + melody strip). The one set of pad elements moves into whichever workspace is open.
    Keyboard: 1–8 (number row or number pad) hold pads, Q–P play the melody strip, ⇧ + letter picks a
    control, ← → move the selected box, Enter writes the last chord, Delete = "same as before", Esc stops writing. */
 (function () {
@@ -89,7 +92,8 @@ const S = {
   keyMidi: {},       // KeyQ… -> midi held from the keyboard
   tour: {},          // values remembered at the start of tutorial steps
 };
-const E = { padEls: [], boxEls: [], boxBySlot: {}, melEls: [], cells: [], presetBtns: [] };
+const E = { padEls: [], boxEls: [], boxBySlot: {}, melEls: [], cells: [], presetBtns: [], miniPads: [], miniSegs: [] };
+const edOpen = () => !!(E.wsEd && E.wsEd.isOpen());
 
 /* ================= helpers ================= */
 const curClip = () => BB.store.clip('chords', BB.state.scene);
@@ -348,6 +352,7 @@ function paintRhythm() {
   E.rNote.textContent = c ? 'Rhythms play in time while the music runs. Every new chord also strikes when it starts.'
     : 'No chords in this scene yet: this sets how the pads play while the music runs, and is saved with your first chord.';
   E.feel.update(); E.len.update();
+  rhythmSummary();
 }
 
 /* ================= painting ================= */
@@ -364,6 +369,7 @@ function paintPads() {
     el.setAttribute('aria-label', 'Pad ' + (i + 1) + ': ' + fullName(c.root, c.q) + ', the ' + num + ' chord' + (c.borrowed ? ' (borrowed)' : ''));
     el.setAttribute('data-tip-title', fullName(c.root, c.q) + ' · ' + num + (c.borrowed ? ' · Borrowed' : ''));
     el.setAttribute('data-tip', c.role + ' Hold to play it (key ' + (i + 1) + ' on the number row or number pad). Good next: ' + orList(nx) + '.');
+    const mp = E.miniPads[i]; chordLabel(mp, c.root, c.q); mp.classList.toggle('home', c.home); mp.classList.toggle('borrowed', c.borrowed);
   });
   paintNext(); paintLit(); paintCur();
 }
@@ -371,11 +377,15 @@ function paintNext() {
   const nx = S.lastPad == null ? [] : nextFor(S.lastPad);
   E.padEls.forEach((el, i) => el.classList.toggle('next', nx.includes(i)));
 }
-function paintLit() { E.padEls.forEach((el, i) => el.classList.toggle('lit', !!S.lit && padKey(i) === S.lit)); }
+function paintLit() {
+  E.padEls.forEach((el, i) => el.classList.toggle('lit', !!S.lit && padKey(i) === S.lit));
+  E.miniPads.forEach((el, i) => el.classList.toggle('lit', !!S.lit && padKey(i) === S.lit));
+}
 function paintCur() {
   let i = -1;
   if (S.cur) { const [r, q] = S.cur.split(':'); i = matchPad(+r, q); }
   E.padEls.forEach((el, j) => el.classList.toggle('cur', j === i));
+  E.miniPads.forEach((el, j) => el.classList.toggle('cur', j === i));
 }
 
 /* The lane: one box per bar / half bar / beat, grouped by bar */
@@ -429,6 +439,28 @@ function buildLane() {
   if (S.grid > need) E.gridHint.textContent = 'Showing ' + (need === 2 ? 'half bars' : 'single beats') + ' because a chord in this progression changes ' + (need === 2 ? 'halfway through a bar' : 'on a beat inside a bar') + '. Use “Same as before” to join boxes.';
   E.laneEmpty.hidden = !(BB.clipIsEmpty('chords', c) && S.sel == null);
   paintSel();
+  buildMini();
+}
+/* The card's little picture of the progression: one block per chord, sized by how long it lasts */
+function buildMini() {
+  const c = curClip(), n = c ? c.slots.length : S.pendingBars * 4, bars = n / 4;
+  E.mini.textContent = ''; E.miniSegs = [];
+  E.mini.style.setProperty('--bars', bars);
+  const empty = BB.clipIsEmpty('chords', c);
+  E.miniEmpty.hidden = !empty;
+  if (empty) return;
+  let i = 0;
+  while (i < n) {
+    let j = i + 1; while (j < n && !c.slots[j]) j++;
+    const v = c.slots[i];
+    const seg = h('span', 'cp-mseg' + (v && !v.rest ? '' : v ? ' rest' : ' none'));
+    if (v && !v.rest) { const nm = h('b'); chordLabel(nm, v.r, v.q); seg.append(nm, h('small', null, numeralOf(v.r, v.q))); }
+    else if (v) seg.append(h('small', null, 'Rest'));
+    seg.style.left = 'calc(' + (i / n * 100) + '% + 2px)'; seg.style.width = 'calc(' + ((j - i) / n * 100) + '% - 4px)';
+    E.mini.append(seg); E.miniSegs.push({ el: seg, a: i, b: j });
+    i = j;
+  }
+  S.miniNow = -1;
 }
 function flashFresh() {
   const el = S.fresh != null && E.boxBySlot[S.fresh];
@@ -443,6 +475,7 @@ function paintSel() {
   E.boxEls.forEach(b => { const on = +b.dataset.slot === S.sel; b.classList.toggle('is-sel', on); b.setAttribute('aria-pressed', String(on)); });
   E.toolbar.hidden = !placing;
   E.writing.hidden = !placing;
+  E.edPadHint.hidden = placing;
   E.padsWrap.classList.toggle('placing', placing);
   E.laneEmpty.hidden = placing || !BB.clipIsEmpty('chords', curClip());
   if (placing) { const w = boxLabel(S.sel, g); E.placeWhere.textContent = w; E.writingWhere.textContent = w.replace(/^Bar/, 'bar'); scrollToBox(S.sel); }
@@ -490,6 +523,8 @@ function paintNow(pos, ch) {
   }
   const k = ch ? ckey(ch.root, ch.q) : null;
   if (k !== S.cur) { S.cur = k; paintCur(); }
+  const slot = pos < 0 ? -1 : Math.floor(pos / 4), mi = slot < 0 ? -1 : E.miniSegs.findIndex(x => slot >= x.a && slot < x.b);
+  if (mi !== S.miniNow) { const o = E.miniSegs[S.miniNow]; if (o) o.el.classList.remove('now'); S.miniNow = mi; const m = E.miniSegs[mi]; if (m) m.el.classList.add('now'); }
 }
 
 /* The melody strip: 10 bars from the scale, starting near middle C */
@@ -519,24 +554,19 @@ function paintHeader() {
   const p = BB.store.p, sc = p.scenes[BB.state.scene], label = 'Scene ' + (BB.state.scene + 1);
   E.keyPill.textContent = T.pcName(p.key) + ' ' + T.MODES[p.mode].name.toLowerCase();
   const sname = sc && sc.name && sc.name !== label ? label + ' · ' + sc.name : label;
-  E.scenePill.textContent = sname; E.rScenePill.textContent = sname;
+  E.scenePill.textContent = sname;
   E.recPill.hidden = !(TR.rec && TR.playing);
   const scene = BB.state.scene;
   E.addBass.querySelector('.btn-label').textContent = BB.store.clip('bass', scene) ? 'Replace bass' : 'Add bass';
   E.addMel.querySelector('.btn-label').textContent = BB.store.clip('melody', scene) ? 'Replace melody' : 'Add melody';
 }
-function ctlSummary() {
-  const p = BB.store.p, inst = BB.INSTRUMENTS[p.tracks.chords.inst];
-  const fl = FLAVORS.find(f => f.id === (BB.state.chordFlavor || 'triad')) || FLAVORS[0];
-  E.ctlsVal.textContent = (inst ? inst.name : 'Sound') + ' · ' + fl.label;
-}
-function openCtls(open) {
-  E.padsPanel.classList.toggle('ctls-open', open);
-  E.ctlsToggle.setAttribute('aria-expanded', String(open));
+function rhythmSummary() {
+  const r = TR.liveRhythm(), pr = BB.CHORD_RHYTHMS.find(x => x.id === BB.rhythmPresetId(r));
+  const feel = BB.CHORD_FEELS.find(f => f.id === (r.feel || 'block')), len = BB.CHORD_LENGTHS.find(f => f.id === (r.len || 'ring'));
+  E.rSummary.textContent = 'Rhythm: ' + (pr ? pr.short + ' ' + (PRESET_SMALL[pr.id] || pr.name) : 'custom') + ' · ' + (feel ? feel.name : '') + ' · ' + (len ? len.name : '');
 }
 function updateControls() {
-  ctlSummary();
-  E.sound.update(); E.flavor.update(); E.bars.update(); E.melSeg.update(); E.write.update(); E.gridSeg.update();
+  E.sound.update(); E.flavor.update(); E.playFlavor.update(); E.bars.update(); E.melSeg.update(); E.write.update(); E.gridSeg.update(); E.knobs.update();
   const need = BB.chordGridNeeded(curClip());
   Array.from(E.gridSeg.querySelectorAll('button')).forEach((b, i) => {
     const o = GRID_OPTS[i], locked = o.id > need;
@@ -568,12 +598,12 @@ function mount(el) {
   const sceneWrap = h('div', 'cp-scenes', scenes);
   const badge = scenes.querySelector(':scope > .hk'); if (badge) sceneWrap.append(badge); // keep the letter badge outside the scroll box
   el.append(h('div', 'view-head cp-head',
-    h('div', 'cp-titles', h('h2', 'view-title', 'Chords'), h('p', 'view-sub', 'Every pad is in your key, so nothing sounds wrong.')),
+    h('div', 'cp-titles', h('h2', 'view-title', 'Chords'), h('p', 'view-sub', 'Shape the chord sound here. Open the progression to write chords, or play the pads freely.')),
     sceneWrap, UI.tourButton('chords')));
 
-  /* ---- pads panel ---- */
+  /* ---- the screen itself: sound ---- */
   E.sound = UI.instrumentSelect('chords', { key: 'S', small: true, tip: 'The instrument your chords play. Electric piano and pads are great for chords, but try a few!' });
-  E.flavor = UI.seg({
+  const flavorSeg = () => UI.seg({
     label: 'Flavor', key: 'F', small: true, options: FLAVORS,
     tip: 'Adds color to every pad at once. Simple is plain and strong; the others add an extra note for a richer sound.',
     value: () => BB.state.chordFlavor || 'triad',
@@ -583,6 +613,46 @@ function mount(el) {
       BB.preview.chord(c.root, c.q);
     },
   });
+  E.flavor = flavorSeg();
+  E.knobs = UI.trackKnobs('chords', { volKey: 'U' });
+  E.keyPill = h('span', { class: 'pill cp-keypill', 'data-tip-title': 'Your key', 'data-tip': 'The pads are built from your song’s key and scale. Change them with Key and Scale at the top; the pads follow.' });
+  const soundPanel = h('section', { class: 'panel cp-sound c-chords', id: 'cp-sound', 'aria-label': 'Chord sound' },
+    h('div', 'panel-head', h('h3', null, h('i', 'sw'), 'Sound'), h('p', 'hint desk-only', 'Change these while the music plays to hear the difference.')),
+    h('div', 'cp-sound-row',
+      h('div', 'cp-ctl cp-ctl-sound', h('span', 'lbl', 'Sound'), E.sound),
+      h('div', 'cp-ctl cp-ctl-flavor', h('span', 'lbl', 'Flavor'), E.flavor),
+      E.knobs));
+
+  /* ---- card: the progression ---- */
+  E.scenePill = h('span', { class: 'pill', 'data-tip-title': 'Scene', 'data-tip': 'This progression belongs to the scene you picked at the top. Each scene can have its own chords.' });
+  E.mini = h('div', 'cp-mini');
+  E.miniEmpty = h('span', 'cp-mini-empty', 'No chords in this scene yet. Tap here to write some, or pick a starter.');
+  E.rSummary = h('span', 'cp-mini-rhythm');
+  E.starter = UI.select({
+    label: 'Starter progressions', key: 'G', small: true, options: starterOptions,
+    tip: 'Start from a famous chord progression in your key. It replaces this scene’s chords (Undo brings them back).',
+    value: () => S.starter, set: applyStarter,
+  });
+  E.starter.classList.add('cp-starter');
+  E.openEd = UI.button({ label: 'Edit chords', key: 'E', icon: I.edit, cls: 'colored ws-go',
+    tip: 'Open the progression full screen: put a chord in each box and set the rhythm. Close it (or press Esc) to come back.', onClick: () => E.wsEd.open({ from: E.openEd }) });
+  const progCard = UI.wsCard({ id: 'cp-prog-card', title: 'Progression', color: 'chords', cls: 'cp-card cp-prog-card', pill: E.scenePill,
+    preview: h('div', 'cp-mini-wrap', E.mini, E.miniEmpty, E.rSummary), onOpen: () => E.wsEd.open({ from: E.openEd }),
+    ariaLabel: 'Open the progression editor', tipTitle: 'Your progression', tip: 'The chords this scene loops, in order. Tap it to open the progression editor.',
+    foot: [E.starter], button: E.openEd });
+
+  /* ---- card: play freely ---- */
+  E.miniPads = BB.range(8).map(() => h('span', 'cp-mpad'));
+  E.openPlay = UI.button({ label: 'Play chords', key: 'P', icon: I.tap, cls: 'colored ws-go',
+    tip: 'Open big chord pads and the melody strip full screen to play freely. Turn on Record to add what you play to the loop.', onClick: () => E.wsPlay.open({ from: E.openPlay }) });
+  const playCard = UI.wsCard({ id: 'cp-play-card', title: 'Pads & melody', color: 'chords', cls: 'cp-card cp-play-card ws-card-side',
+    preview: h('div', 'cp-mpads', E.miniPads), onOpen: () => E.wsPlay.open({ from: E.openPlay }),
+    ariaLabel: 'Open the chord pads', tipTitle: 'Play freely', tip: 'Eight chord pads that are always in your key, plus a melody strip. Tap here to open them big.',
+    foot: [h('p', 'hint cp-card-hint', h('span', 'desk-only', 'Keys 1–8 play the pads from here too.'))], button: E.openPlay });
+
+  el.append(soundPanel, h('div', 'cp-cards', progCard, playCard));
+
+  /* ---- the pads (one set, moved into whichever workspace is open) ---- */
   E.padEls = BB.range(8).map(i => {
     const b = h('button', { class: 'cp-pad', dataset: { i: String(i) } },
       h('span', 'cp-pad-top', h('span', 'cp-num'), h('span', { class: 'cp-kc', 'aria-hidden': 'true' }, String(i + 1))),
@@ -602,26 +672,13 @@ function mount(el) {
   });
   /* data-no-press-tip: pads are held to play, so a long press on a phone plays instead of showing a tooltip */
   E.padsWrap = h('div', { class: 'cp-pads', id: 'cp-pads', 'data-no-press-tip': '' }, E.padEls);
-  E.keyPill = h('span', { class: 'pill cp-keypill', 'data-tip-title': 'Your key', 'data-tip': 'The pads are built from your song’s key and scale. Change them with Key and Scale at the top; the pads follow.' });
   E.writing = h('span', { class: 'pill cp-writing', hidden: true, 'data-tip-title': 'Writing chords', 'data-tip': 'Tapping a pad now also writes it into the selected box of the progression. Press Done (or Esc) to just play again.' },
     h('span', { class: 'ico', html: I.edit }), 'Tap a pad to write it in ', E.writingWhere = h('b'));
-  E.ctlsVal = h('span', 'cp-ct-val');
-  E.ctlsToggle = h('button', { class: 'btn sm cp-ctls-toggle', 'aria-expanded': 'false', 'aria-controls': 'cp-ctls',
-    'data-tip-title': 'Sound and flavor', 'data-tip': 'Show or hide the controls for the chord sound and flavor.',
-    onclick: () => openCtls(!E.padsPanel.classList.contains('ctls-open')) },
-  h('span', 'lbl', 'Sound & flavor'), E.ctlsVal, h('span', { class: 'cp-ct-chev', 'aria-hidden': 'true' }));
-  const padsPanel = E.padsPanel = h('section', { class: 'panel cp-pads-panel c-chords', id: 'cp-pads-panel', 'aria-label': 'Chord pads' },
-    h('div', 'panel-head',
-      h('h3', null, h('i', 'sw'), 'Chord pads'),
-      h('p', 'hint', 'Hold a pad', h('span', 'desk-only', ' or press 1–8 (number row or number pad)'), '. Outlined pads make a good next chord.'),
-      h('span', 'grow'), E.writing, E.keyPill),
-    E.ctlsToggle,
-    h('div', { class: 'cp-ctls', id: 'cp-ctls' },
-      h('div', 'cp-ctl', h('span', 'lbl', 'Sound'), E.sound),
-      h('div', 'cp-ctl', h('span', 'lbl', 'Flavor'), E.flavor)),
-    E.padsWrap);
+  E.padSlotEd = h('div', 'cp-padslot');
+  E.padSlotPlay = h('div', 'cp-padslot');
+  E.padSlotEd.append(E.padsWrap);
 
-  /* ---- progression panel ---- */
+  /* ---- workspace: the progression editor (lane + pads, and the rhythm) ---- */
   E.write = UI.toggle({
     label: 'Write chords', key: 'A', icon: I.edit, cls: 'sm c-chords',
     tip: 'Turn on, then tap chord pads to fill the boxes one after another. You can also tap any box to start there.',
@@ -642,12 +699,6 @@ function mount(el) {
   E.up = UI.button({ label: 'Move chords up', cls: 'sm icon-only cp-step', text: false, tip: 'Move every chord one step up the scale (C becomes Dm, F becomes G…). A quick way to make a variation.', onClick: () => transpose(1) });
   E.down = UI.button({ label: 'Move chords down', cls: 'sm icon-only cp-step', text: false, tip: 'Move every chord one step down the scale (Dm becomes C, G becomes F…).', onClick: () => transpose(-1) });
   E.up.append(h('span', { class: 'cp-step-glyph', 'aria-hidden': 'true' }, '▲')); E.down.append(h('span', { class: 'cp-step-glyph', 'aria-hidden': 'true' }, '▼'));
-  E.starter = UI.select({
-    label: 'Starter progressions', key: 'G', small: true, options: starterOptions,
-    tip: 'Start from a famous chord progression in your key. It replaces this scene’s chords (Undo brings them back).',
-    value: () => S.starter, set: applyStarter,
-  });
-  E.starter.classList.add('cp-starter');
   E.clear = UI.button({ label: 'Clear', key: 'C', icon: I.trash, cls: 'sm ghost', tip: 'Remove every chord from this scene’s progression. You can undo it.', onClick: clearClip });
 
   /* toolbar for the selected box */
@@ -674,13 +725,12 @@ function mount(el) {
 
   E.lane = h('div', { class: 'cp-lane', id: 'cp-lane' });
   E.laneScroll = h('div', 'cp-lane-scroll', E.lane);
-  E.laneEmpty = h('p', { class: 'cp-lane-empty' }, 'No chords here yet. Tap the first box, then tap pads. Or pick a starter.');
+  E.laneEmpty = h('p', { class: 'cp-lane-empty' }, 'No chords here yet. Tap the first box, then tap pads below. Or pick a starter on the Chords screen.');
   E.gridHint = h('p', { class: 'hint cp-grid-hint', hidden: true });
   E.lane.addEventListener('click', e => {
     const b = e.target.closest('.cp-box'); if (!b) return;
     setSel(+b.dataset.slot, { hear: true });
   });
-  E.scenePill = h('span', { class: 'pill', 'data-tip-title': 'Scene', 'data-tip': 'This progression belongs to the scene you picked at the top. Each scene can have its own chords.' });
   E.recPill = h('span', { class: 'pill cp-recpill', hidden: true, 'data-tip-title': 'Recording', 'data-tip': 'Record is on: the chords you play land in the progression in time with the beat. Undo removes a take.' }, h('i', 'cp-recdot'), 'Recording');
 
   /* follow helpers */
@@ -691,13 +741,10 @@ function mount(el) {
   E.addBass.id = 'cp-add-bass';
 
   E.toolsToggle = h('button', { class: 'btn sm cp-tools-toggle', 'aria-expanded': 'false', 'aria-controls': 'cp-more',
-    'data-tip-title': 'More tools', 'data-tip': 'Show tools for the whole progression: chord changes, length, double it, move, starters and clear.',
+    'data-tip-title': 'More tools', 'data-tip': 'Show tools for the whole progression: chord changes, length, double it, move and clear.',
     onclick: () => { const open = !E.lanePanel.classList.contains('tools-open'); E.lanePanel.classList.toggle('tools-open', open); E.toolsToggle.setAttribute('aria-expanded', String(open)); } },
   'More tools', h('span', { class: 'cp-ct-chev', 'aria-hidden': 'true' }));
   const lanePanel = E.lanePanel = h('section', { class: 'panel cp-lane-panel c-chords', id: 'cp-lane-panel', 'aria-label': 'Chord progression' },
-    h('div', 'panel-head',
-      h('h3', null, h('i', 'sw'), 'Progression'), E.scenePill, E.recPill,
-      h('p', 'hint', 'The chords this scene loops, box by box.'), h('span', 'grow')),
     h('div', 'cp-lane-tools',
       E.write, E.toolsToggle,
       h('span', { class: 'cp-more', id: 'cp-more' },
@@ -705,17 +752,21 @@ function mount(el) {
         h('span', 'cp-tool', h('span', 'lbl', 'Bars'), E.bars),
         E.double,
         h('span', 'cp-tool', h('span', 'lbl', 'Move'), E.up, E.down),
-        E.starter, E.clear)),
+        E.clear)),
     E.toolbar,
     E.laneEmpty,
     h('div', 'cp-lane-wrap', E.laneScroll),
-    E.gridHint,
-    h('div', { class: 'cp-follow', id: 'cp-follow' },
-      h('span', { class: 'lbl cp-follow-lbl', 'data-tip-title': 'Follow these chords', 'data-tip': 'One tap adds a bass line or melody that is built from this progression, so it always fits.' }, 'Follow these chords'),
-      h('span', 'cp-follow-item c-bass', h('span', 'cp-follow-name', 'Bass'), E.bassSeg, E.addBass),
-      h('span', 'cp-follow-item c-melody', h('span', 'cp-follow-name', 'Melody'), E.melFollowSeg, E.addMel)));
+    E.gridHint);
+  const follow = h('section', { class: 'panel cp-follow c-chords', id: 'cp-follow', 'aria-label': 'Follow these chords' },
+    h('span', { class: 'lbl cp-follow-lbl', 'data-tip-title': 'Follow these chords', 'data-tip': 'One tap adds a bass line or melody that is built from this progression, so it always fits.' }, 'Follow these chords'),
+    h('span', 'cp-follow-item c-bass', h('span', 'cp-follow-name', 'Bass'), E.bassSeg, E.addBass),
+    h('span', 'cp-follow-item c-melody', h('span', 'cp-follow-name', 'Melody'), E.melFollowSeg, E.addMel));
+  const edPads = h('section', { class: 'panel cp-pads-panel cp-ed-pads c-chords', 'aria-label': 'Chord pads' },
+    h('div', 'panel-head', h('h3', null, h('i', 'sw'), 'Chord pads'), E.writing,
+      E.edPadHint = h('p', 'hint cp-edpad-hint', 'Tap a box above, then tap pads to fill it.')),
+    E.padSlotEd);
 
-  /* ---- rhythm panel ---- */
+  /* rhythm */
   E.presets = h('div', { class: 'cp-presets', id: 'cp-presets', role: 'group', 'aria-label': 'Strikes per bar', 'data-tip-title': 'Strikes per bar', 'data-tip': 'How many times each chord is played in every bar. Pick one, then press Play to hear it.' });
   E.presetBtns = BB.CHORD_RHYTHMS.map(r => {
     const b = h('button', { class: 'cp-preset', 'aria-pressed': 'false', 'data-tip-title': r.name, 'data-tip': r.desc, onclick: () => pickPreset(r.id) },
@@ -757,10 +808,9 @@ function mount(el) {
   E.rCount = h('span', 'cp-rcount');
   E.rCustom = h('span', { class: 'pill cp-custom', hidden: true, 'data-tip-title': 'Custom rhythm', 'data-tip': 'Your own pattern, made by tapping the squares. Pick a preset to start over.' }, 'Custom');
   E.rNote = h('p', 'hint cp-rnote');
-  E.rScenePill = h('span', { class: 'pill', 'data-tip-title': 'Scene', 'data-tip': 'The rhythm belongs to this scene’s chords.' });
   const rhythmPanel = h('section', { class: 'panel cp-rhythm-panel c-chords', id: 'cp-rhythm-panel', 'aria-label': 'Chord rhythm' },
     h('div', 'panel-head',
-      h('h3', null, h('i', 'sw'), 'Rhythm'), h('span', 'cp-rsub', 'how often each chord plays'), E.rScenePill, h('span', 'grow')),
+      h('h3', null, h('i', 'sw'), 'Rhythm'), h('span', 'cp-rsub', 'how often each chord plays'), h('span', 'grow')),
     h('div', 'cp-rsec', h('span', 'lbl', 'Strikes per bar'), E.presets),
     h('div', 'cp-rsec',
       h('div', 'cp-rline', h('span', 'lbl', 'One bar'), E.rCount, E.rCustom),
@@ -770,7 +820,23 @@ function mount(el) {
       h('div', 'cp-ctl', h('span', 'lbl', 'Length'), E.len)),
     E.rNote);
 
-  /* ---- melody panel ---- */
+  /* Chords | Rhythm switch for screens too narrow to show both side by side */
+  E.tab = 'chords';
+  E.tabSeg = UI.seg({ label: 'Show', small: true,
+    tip: 'Chords: put a chord in each box. Rhythm: how often each chord plays in a bar.',
+    options: [{ id: 'chords', label: 'Chords', tip: 'The boxes of the progression and the pads to fill them.' }, { id: 'rhythm', label: 'Rhythm', tip: 'How many times each chord strikes in a bar, and how it is played.' }],
+    value: () => E.tab, set: setTab });
+  E.tabSeg.classList.add('cp-tabs');
+  E.edBody = h('div', { class: 'cp-ed', 'data-tab': 'chords' }, lanePanel, edPads, follow, rhythmPanel);
+  E.wsEd = UI.workspace({ id: 'chords-editor', title: 'Progression', color: 'chords', cls: 'cp-ws cp-edws ws-tight',
+    closeTip: 'Close the progression editor and go back to the Chords screen. Shortcut: Esc.',
+    head: [E.tabSeg, E.recPill, h('span', 'grow'), UI.sceneSelect({ track: 'chords', key: 'Z' })],
+    onOpen: () => { E.padSlotEd.append(E.padsWrap); refresh({ all: true }); },
+    onClose: () => { if (S.sel != null) setSel(null); } });
+  E.wsEd.body.append(E.edBody);
+  el.append(E.wsEd.el);
+
+  /* ---- workspace: play freely (pads + melody strip) ---- */
   E.melSeg = UI.seg({
     label: 'Melody notes', small: true,
     tip: 'How many different notes the strip uses. 5 notes is the easiest: almost anything you play sounds good.',
@@ -789,8 +855,19 @@ function mount(el) {
       h('p', 'hint', 'Slide across the bars', h('span', 'desk-only', ' or press Q to P'), '.'),
       h('span', 'grow'), E.melSeg),
     E.mel);
-
-  el.append(h('div', 'cp-grid', padsPanel, lanePanel, rhythmPanel, melPanel));
+  const playPads = h('section', { class: 'panel cp-pads-panel cp-play-pads c-chords', id: 'cp-pads-panel', 'aria-label': 'Chord pads' },
+    h('div', 'panel-head',
+      h('h3', null, h('i', 'sw'), 'Chord pads'),
+      h('p', 'hint', 'Hold a pad', h('span', 'desk-only', ' or press 1–8'), '. Outlined pads make a good next chord.'),
+      h('span', 'grow'), E.keyPill),
+    E.padSlotPlay);
+  E.playFlavor = flavorSeg();
+  E.wsPlay = UI.workspace({ id: 'chords-play', title: 'Pads & melody', color: 'chords', cls: 'cp-ws cp-playws ws-tight',
+    closeTip: 'Close the pads and go back to the Chords screen. Shortcut: Esc.',
+    head: [h('span', 'grow'), E.playFlavor, UI.sceneSelect({ track: 'chords', key: 'Z' })],
+    onOpen: () => { if (S.sel != null) setSel(null); E.padSlotPlay.append(E.padsWrap); refresh({ all: true }); } });
+  E.wsPlay.body.append(h('div', 'cp-play', playPads, melPanel));
+  el.append(E.wsPlay.el);
 
   /* ---- events ---- */
   BB.on('chord', d => {
@@ -809,7 +886,7 @@ function mount(el) {
   });
   BB.on('ui', d => {
     if ('scene' in d) { S.sel = null; S.starter = ''; refresh({ all: true }); return; }
-    if ('chordFlavor' in d) { paintPads(); E.flavor.update(); ctlSummary(); }
+    if ('chordFlavor' in d) { paintPads(); E.flavor.update(); E.playFlavor.update(); }
     if ('chordRhythm' in d) paintRhythm();
   });
   BB.on('transport', d => {
@@ -818,6 +895,10 @@ function mount(el) {
   });
 
   refresh({ all: true });
+}
+function setTab(id) {
+  E.tab = id; E.edBody.dataset.tab = id; E.tabSeg.update();
+  if (id === 'rhythm' && S.sel != null) setSel(null);
 }
 
 /* ================= keyboard ================= */
@@ -867,23 +948,24 @@ function keyup(e) {
 /* ================= hands-on tutorial ================= */
 const padName = i => { const pads = S.pads.length ? S.pads : buildPadChords(); return T.chordName(pads[i].root, pads[i].q); };
 const chordStarts = () => { const c = curClip(); return c ? c.slots.filter(s => s && !s.rest).length : 0; };
+const ED = 'chords-editor';
 const tutorial = [
-  { target: '#cp-pads-panel', view: 'chords', title: 'Let’s build a progression',
-    text: 'A <b>chord</b> is a few notes played together. A <b>progression</b> is a short row of chords that loops, and it sets the mood of your song. These pads are always in your key, so nothing sounds wrong. Steps with a task wait for you to do it; press <b>Skip</b> to just read along.' },
+  { target: '#cp-prog-card', view: 'chords', title: 'Let’s build a progression',
+    text: 'A <b>chord</b> is a few notes played together. A <b>progression</b> is a short row of chords that loops, and it sets the mood of your song. This card shows the progression of the scene you picked. Steps with a task wait for you to do it; press <b>Skip</b> to just read along.' },
   { target: '.cp-scenes', view: 'chords', title: 'Pick an empty scene',
     task: 'Tap a scene without a dot (for example <b>Scene 6</b>).', doneText: 'This scene is empty and ready.',
     text: 'Scenes are the parts of your song, like a verse or a chorus. Each one has its own chords.',
     check: () => { const c = BB.store.p.clips.chords[BB.state.scene]; return !c || BB.clipIsEmpty('chords', c); } },
-  { target: '#cp-lane-panel', view: 'chords', title: 'The progression lane',
+  { target: '#cp-lane-panel', view: 'chords', ws: ED, before: () => setTab('chords'), title: 'The progression lane',
     task: 'Tap the <b>first box</b> (bar 1).', doneText: 'Box 1 is picked. You are writing!',
-    text: 'Each box is one bar. The chord in a box plays for that whole bar.',
+    text: 'This is the progression editor. Each box is one bar, and the chord in a box plays for that whole bar. <b>Close</b> (or Esc) takes you back.',
     check: () => S.sel === 0 },
-  { target: '#cp-pads', view: 'chords', title: 'Put a chord in it',
+  { target: '#cp-pads', view: 'chords', ws: ED, title: 'Put a chord in it',
     get task() { const i = tryPads()[0]; return 'Tap pad <b>' + (i + 1) + '</b> (<b>' + padName(i) + '</b>), or press ' + (i + 1) + '.'; },
     doneText: 'Written into bar 1, and bar 2 is picked next.',
-    text: 'While a box is picked, tapping a pad writes that chord into it, then jumps to the next box.',
+    text: 'While a box is picked, tapping a pad writes that chord into it, then jumps to the next box. These pads are always in your key, so nothing sounds wrong.',
     check: () => { const c = curClip(), pads = S.pads.length ? S.pads : buildPadChords(), s = c && c.slots[0]; return !!(s && !s.rest && s.r === pads[tryPads()[0]].root); } },
-  { target: '#cp-pads', view: 'chords', title: 'Fill the other bars',
+  { target: '#cp-pads', view: 'chords', ws: ED, title: 'Fill the other bars',
     get task() { const ids = tryPads().slice(1); return 'Now tap pads <b>' + ids.map(i => i + 1).join(', ') + '</b> (' + ids.map(padName).join(', ') + ').'; },
     doneText: 'Four chords: that is a real progression!',
     get text() { const ids = tryPads(), pads = S.pads.length ? S.pads : buildPadChords(); return 'This one is ' + ids.map(i => numeralOf(pads[i].root, pads[i].q)).join('–') + ', a progression behind countless hits.'; },
@@ -892,32 +974,32 @@ const tutorial = [
     task: 'Press <b>Play</b> (or Space).', doneText: 'Listen: your four chords loop over and over.',
     text: 'Your progression plays on repeat. Keep it running while you try the next steps.',
     check: () => BB.transport.playing },
-  { target: '#cp-presets', view: 'chords', title: 'How often each chord plays',
+  { target: '#cp-presets', view: 'chords', ws: ED, before: () => setTab('rhythm'), title: 'How often each chord plays',
     task: 'Pick <b>4×</b> to strike every chord on every beat.', doneText: 'Four strikes in every bar.',
     text: 'Right now each chord plays once and rings. These buttons choose how many times it strikes in a bar. The squares below show the pattern; tap them to make your own.',
     check: () => BB.rhythmPresetId(TR.liveRhythm()) === 'x4' },
-  { target: '#cp-feel', view: 'chords', title: 'Change the feel',
-    before: () => { S.tour.feel = TR.liveRhythm().feel; },
+  { target: '#cp-feel', view: 'chords', ws: ED, title: 'Change the feel',
+    before: () => { setTab('rhythm'); S.tour.feel = TR.liveRhythm().feel; },
     task: 'Try a <b>Feel</b>, like <b>Arp up</b>.', doneText: 'Hear how the same chords sound new?',
     text: '<b>Feel</b> decides how the notes of each strike are played: together, strummed, or one at a time.',
     check: () => TR.liveRhythm().feel !== S.tour.feel },
-  { target: '#cp-lane-panel', view: 'chords', title: 'Change one chord',
-    before: () => { const c = curClip(); S.tour.bar3 = c ? JSON.stringify(boxInfo(c, 8)) : ''; },
+  { target: '#cp-lane-panel', view: 'chords', ws: ED, title: 'Change one chord',
+    before: () => { setTab('chords'); const c = curClip(); S.tour.bar3 = c ? JSON.stringify(boxInfo(c, 8)) : ''; },
     task: 'Tap <b>bar 3</b>, then tap a different pad.', doneText: 'Changed! Only bar 3 changed; every other box stayed the same.',
     text: 'You can change any box at any time. Tap it to hear it, then tap a pad to replace it.',
     check: () => { const c = curClip(); return !!c && S.tour.bar3 !== '' && JSON.stringify(boxInfo(c, 8)) !== S.tour.bar3; } },
-  { target: () => (E.toolbar.hidden ? E.lanePanel : E.same), view: 'chords', title: 'Same as before',
-    before: () => { if (curClip()) setSel(8); },
+  { target: () => (E.toolbar.hidden ? E.lanePanel : E.same), view: 'chords', ws: ED, title: 'Same as before',
+    before: () => { setTab('chords'); if (curClip()) setSel(8); },
     task: 'Tap <b>Same as before</b>.', doneText: 'Bar 3 now keeps playing the chord from bar 2.',
     text: '<b>Same as before</b> lets the chord on the left carry on through the picked box, as if it had never changed. Nothing else moves. Undo works too.',
     check: () => { const c = curClip(); return !!c && !c.slots[8]; } },
-  { target: '#cp-follow', view: 'chords', title: 'Add a bass line that follows',
-    before: () => { if (S.sel != null) setSel(null); },
+  { target: '#cp-follow', view: 'chords', ws: ED, title: 'Add a bass line that follows',
+    before: () => { setTab('chords'); if (S.sel != null) setSel(null); },
     task: 'Tap <b>Add bass</b>.', doneText: 'A bass line now follows your chords.',
     text: 'These buttons write a bass line or melody built from your chords, so it always fits.',
     check: () => !!BB.store.p.clips.bass[BB.state.scene] },
-  { target: '#cp-mel-panel', view: 'chords', title: 'Play a melody on top',
-    text: 'Slide across these bars (or press <b>Q to P</b>) to play a melody. They only hold notes from your scale. <b>Try next:</b> pick <b>Off</b> under Strikes per bar for a reggae feel, or press <b>Double it</b> and change the last two bars.' },
+  { target: '#cp-mel-panel', view: 'chords', ws: 'chords-play', title: 'Play a melody on top',
+    text: 'This is the play area: the chord pads plus a melody strip. Slide across the bars (or press <b>Q to P</b>) to play a melody; they only hold notes from your scale. <b>Try next:</b> back on the Chords screen, change the <b>Sound</b> or <b>Flavor</b> while it plays.' },
 ];
 
 BB.views.register({

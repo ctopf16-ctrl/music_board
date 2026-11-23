@@ -1,7 +1,39 @@
-/* Beat Board · Keys screen: piano roll + playable piano.
-   Everything is scoped to the Keys view. The root .kx carries the track color class (c-bass, c-melody, c-keys),
-   so var(--c) / var(--c-ink) follow the track being edited. */
+/* Beat Board · Keys screen: sound panel + two cards, and two workspaces (full-screen areas):
+   the piano roll and a playable piano.
+   Everything is scoped to the Keys view. The root .kx and both workspaces carry the track color class
+   (c-bass, c-melody, c-keys), so var(--c) / var(--c-ink) follow the track being edited. */
 .view[data-view="keys"] .kx { display: grid; gap: 12px; min-width: 0; }
+.view[data-view="keys"] .kx-phone { display: none; }
+
+/* ---------- sound panel and cards ---------- */
+.view[data-view="keys"] .kx-sound-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 26px; min-width: 0; }
+.view[data-view="keys"] .kx-f-inst .sel select { min-width: 180px; }
+.view[data-view="keys"] .kx-sound-name { color: var(--ink); }
+.view[data-view="keys"] .kx-cards { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+.view[data-view="keys"] .kx-mini { position: relative; height: 150px; margin: 10px; border-radius: 8px; overflow: hidden;
+  background: color-mix(in oklab, var(--raise) 62%, var(--well));
+  background-image: linear-gradient(90deg, var(--line) 0 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--line) 50%, transparent) 0 1px, transparent 1px);
+  background-size: calc(100% / var(--bars, 2)) 100%, calc(100% / var(--bars, 2) / 4) 100%; }
+.view[data-view="keys"] .kx-mini-notes { position: absolute; inset: 6px 0; }
+.view[data-view="keys"] .kx-mn { position: absolute; border-radius: 3px; background: var(--c); opacity: calc(.45 + var(--v, .8) * .55); }
+.view[data-view="keys"] .kx-mini-ph { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; display: none; background: var(--ink); opacity: .55; }
+.view[data-view="keys"] .kx-mini-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 12px; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--ink-2); }
+.view[data-view="keys"] .kx-mini-piano-wrap { padding: 12px; }
+.view[data-view="keys"] .kx-mini-piano { height: 146px; gap: 2px; }
+.view[data-view="keys"] .kx-mini-piano .pkey.white { border-radius: 0 0 5px 5px; box-shadow: inset 0 -4px 0 var(--key-w2), 0 1px 2px rgba(0,0,0,.2); }
+.view[data-view="keys"] .kx-mini-piano .pkey.black { border-radius: 0 0 4px 4px; }
+.view[data-view="keys"] .kx-mini-piano .pkey.kx-play:not(.lit) { background: color-mix(in oklab, var(--c) 40%, var(--key-w)); }
+.view[data-view="keys"] .kx-mini-piano .pkey.black.kx-play:not(.lit) { background: color-mix(in oklab, var(--c) 55%, var(--key-b)); }
+.view[data-view="keys"] .kx-card-hint { font-size: 12.5px; }
+.view[data-view="keys"] .kx-ed-card .ws-card-foot .sel select { min-width: 170px; }
+
+/* ---------- workspaces ---------- */
+.view[data-view="keys"] .kx-edws .kx-rollwrap { flex: 1 1 auto; min-height: 260px; }
+.view[data-view="keys"] .kx-edws .kx-roll { position: absolute; inset: 0; height: auto; }
+.view[data-view="keys"] .kx-ws .ws-head .kx-info { margin-left: -4px; }
+.view[data-view="keys"] .kx-piano-ctl { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; min-width: 0; }
+.view[data-view="keys"] .kx-playws .kx-piano { flex: 1 1 auto; min-height: 220px; max-height: 420px; display: grid; grid-template-rows: repeat(var(--rows, 1), minmax(0, 1fr)); gap: 16px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.view[data-view="keys"] .kx-piano-row { height: 100%; min-height: 0; }
 
 /* ---------- header ---------- */
 .view[data-view="keys"] .kx-head { align-items: baseline; }
@@ -100,7 +132,6 @@
 .view[data-view="keys"] .kx-empty b { color: var(--ink); font-size: 14.5px; }
 
 /* ---------- piano ---------- */
-.view[data-view="keys"] .kx-piano { height: 144px; }
 .view[data-view="keys"] .kx-piano .pkey { cursor: pointer; }
 .view[data-view="keys"] .kx-piano .klet, .view[data-view="keys"] .kx-piano .kname { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--font-mono); pointer-events: none; }
 .view[data-view="keys"] .kx-piano .klet { display: none; bottom: 26px; font-size: 11px; font-weight: 700; color: var(--key-w-ink); }
@@ -120,10 +151,36 @@ body.show-keys .view[data-view="keys"] .kx-piano .klet { display: block; }
 .view[data-view="keys"] .kx-hint { display: flex; align-items: center; gap: 8px; }
 .view[data-view="keys"] .kx-recdot { width: 9px; height: 9px; border-radius: 50%; background: var(--rec); flex: none; }
 
+@media (max-width: 900px) {
+  .view[data-view="keys"] .kx-cards { grid-template-columns: minmax(0, 1fr); }
+  .view[data-view="keys"] .kx-mini-piano { height: 80px; }
+}
 /* ---------- phones ---------- */
 @media (max-width: 720px) {
-  .view[data-view="keys"] .kx { gap: 10px; }
+  .view[data-view="keys"] .kx { gap: 8px; }
   .view[data-view="keys"] .kx-desk { display: none; }
+  .view[data-view="keys"] .kx-phone { display: inline; }
+  .view[data-view="keys"] .kx-sound-row { gap: 8px; }
+  .view[data-view="keys"] .kx-f-inst { flex: 1 1 100%; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 12px; }
+  .view[data-view="keys"] .kx-f-inst .sel, .view[data-view="keys"] .kx-f-inst .sel select { width: 100%; max-width: none; min-width: 0; }
+  .view[data-view="keys"] .kx-sound .track-knobs { flex: 1 1 100%; flex-wrap: nowrap; }
+  .view[data-view="keys"] .kx-sound .knob { padding: 4px 0; }
+  .view[data-view="keys"] .kx-cards { gap: 8px; }
+  .view[data-view="keys"] .kx-mini { height: 92px; margin: 8px; }
+  .view[data-view="keys"] .kx-sound-name { display: none; }
+  .view[data-view="keys"] .kx-ws .kx-track-sel select { font-weight: 700; color: var(--c); }
+  .view[data-view="keys"] .kx-mini-piano-wrap { padding: 8px; }
+  .view[data-view="keys"] .kx-mini-piano { height: 50px; }
+  .view[data-view="keys"] .kx-ed-card .ws-card-foot { flex-wrap: nowrap; }
+  .view[data-view="keys"] .kx-ed-card .ws-card-foot .grow { display: none; }
+  .view[data-view="keys"] .kx-ed-card .ws-card-foot .sel { flex: 1 1 auto; min-width: 0; }
+  .view[data-view="keys"] .kx-ed-card .ws-card-foot .sel select { width: 100%; min-width: 0; max-width: none; }
+  .view[data-view="keys"] .kx-card-hint { flex: 1 1 120px; }
+  .view[data-view="keys"] .kx-ws .ws-head .kx-status { display: none; }
+  .view[data-view="keys"] .kx-track-sel select { max-width: 104px; }
+  .view[data-view="keys"] .kx-playws .kx-piano { max-height: none; gap: 14px; }
+  .view[data-view="keys"] .kx-piano-ctl { gap: 8px 12px; }
+  .view[data-view="keys"] .kx-piano-ctl .kx-inline { flex: 0 1 auto; }
   .view[data-view="keys"] .kx-head { align-items: center; }
   .view[data-view="keys"] .kx-head .view-sub { order: 5; flex-basis: 100%; }
   .view[data-view="keys"] .kx-tracks { display: flex; width: 100%; }
@@ -136,8 +193,6 @@ body.show-keys .view[data-view="keys"] .kx-piano .klet { display: block; }
   .view[data-view="keys"] .kx-f-len { order: 3; flex-basis: 100%; }
   .view[data-view="keys"] .kx-more-wrap { order: 2; }
   .view[data-view="keys"] .kx-secondary { order: 4; }
-  .view[data-view="keys"] .kx-editor-head .kx-inline { flex: 1 1 100%; }
-  .view[data-view="keys"] .kx-editor-head .kx-starter, .view[data-view="keys"] .kx-editor-head .kx-starter select { flex: 1 1 auto; width: 100%; max-width: none; }
   .view[data-view="keys"] .kx-tools { gap: 8px 10px; }
   .view[data-view="keys"] .kx-tools .seg.sm button { height: 36px; padding: 0 9px; font-size: 13px; }
   .view[data-view="keys"] .kx-tools .btn.sm { height: 40px; }
@@ -146,17 +201,13 @@ body.show-keys .view[data-view="keys"] .kx-piano .klet { display: block; }
   .view[data-view="keys"] .kx-secondary { display: none; }
   .view[data-view="keys"] .kx-tools.open .kx-secondary { display: grid; }
   .view[data-view="keys"] .kx-more-wrap { display: flex; margin-left: auto; }
-  .view[data-view="keys"] .kx-roll { height: clamp(230px, 46vh, 420px); }
   .view[data-view="keys"] .kx-note { font-size: 10px; }
   .view[data-view="keys"] .kx-note .rz { width: 14px; }
   .view[data-view="keys"] .kx-del { width: 42px; height: 42px; padding: 10px; }
   .view[data-view="keys"] .kx-key { padding-right: 5px; }
-  .view[data-view="keys"] .kx-piano { height: 170px; }
   .view[data-view="keys"] .kx-piano .kname { font-size: 11px; }
-  .view[data-view="keys"] .kx-piano-head .kx-inline { flex: 0 1 auto; }
-  .view[data-view="keys"] .kx-piano-head .stepper { height: 40px; }
-  .view[data-view="keys"] .kx-piano-head .stepper-btn { width: 40px; }
-  .view[data-view="keys"] .kx.kx-touring { padding-bottom: 48vh; }
+  .view[data-view="keys"] .kx-piano-ctl .stepper { height: 40px; }
+  .view[data-view="keys"] .kx-piano-ctl .stepper-btn { width: 40px; }
   .view[data-view="keys"] .kx-info { width: 40px; height: 40px; margin: -9px -8px -9px -14px; }
   .view[data-view="keys"] .sel.sm select { height: 40px; font-size: 14px; }
   .view[data-view="keys"] .kx-head .tour-btn { height: 40px; }

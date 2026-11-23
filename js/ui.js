@@ -25,7 +25,8 @@ C.add = function (el, spec) {
   if (!el.hasAttribute('tabindex') && !/^(BUTTON|SELECT|INPUT)$/.test(el.tagName)) el.tabIndex = 0;
   return el;
 };
-const visible = el => el && el.isConnected && el.getClientRects().length > 0 && !el.closest('[hidden]');
+/* hidden, or covered by an open workspace (the screen underneath is inert) */
+const visible = el => el && el.isConnected && el.getClientRects().length > 0 && !el.closest('[hidden], [inert]');
 C.scopeEls = function () {
   const view = BB.$('.view[data-view="' + BB.state.view + '"]');
   const inView = view ? BB.$$('.ctl', view) : [];
@@ -279,6 +280,63 @@ UI.scenePicker = function (o = {}) {
   return el;
 };
 
+/* Compact scene picker (a native select) for workspace headers. Same behaviour as UI.scenePicker.
+   o: {track: trackId | () => trackId (marks scenes that have a clip with a dot), key, label} */
+UI.sceneSelect = function (o = {}) {
+  const tr = () => (typeof o.track === 'function' ? o.track() : o.track);
+  const label = i => { const p = BB.store.p, t = tr(); return (i + 1) + ' · ' + p.scenes[i].name + (t && p.clips[t][i] ? '  •' : ''); };
+  const sel = UI.select({
+    label: o.label || 'Scene', key: o.key, small: true,
+    tip: 'The scene (song section) you are working on. Pick another to switch to it. While playing, the whole scene starts on the next bar. A dot means it already has a part here.',
+    options: () => BB.range(BB.SCENE_COUNT).map(i => ({ id: String(i), label: label(i) })),
+    value: () => String(BB.state.scene),
+    set: v => { const i = +v; BB.setState({ scene: i }); if (BB.transport.mode === 'loop') BB.transport.launchScene(i); },
+  });
+  sel.classList.add('scene-sel');
+  let sig = '';
+  const pick = sel.update; // the plain select's update: just shows the current scene
+  const sync = () => { const s = BB.range(BB.SCENE_COUNT).map(label).join('|'); if (s !== sig) { sig = s; sel.refill(); } else pick(); };
+  BB.on('ui', d => { if ('scene' in d || 'noteTrack' in d) sync(); });
+  BB.on('change', sync);
+  sel.update = sync; sync();
+  return sel;
+};
+
+/* A track's sound shaping, the same dials as its Mixer strip: volume, tone, reverb (space) and echo.
+   trackId can be a function (Keys edits whichever note track is picked). o: {volKey} */
+UI.trackKnobs = function (trackId, o = {}) {
+  const id = () => (typeof trackId === 'function' ? trackId() : trackId);
+  const name = () => BB.TRACK[id()].name, tr = () => BB.store.p.tracks[id()];
+  const def = BB.defaultProject().tracks;
+  const pct = v => Math.round(v * 100) + '%';
+  const set = (field, label) => v => {
+    v = Math.round(v * 100) / 100;
+    if (tr()[field] === v) return;
+    BB.store.change(name() + ' ' + label, p => { p.tracks[id()][field] = v; }, { group: 'mx-' + field + '-' + id(), info: { track: id() } });
+  };
+  const defs = [
+    { field: 'vol', label: 'Volume', key: o.volKey, fmt: pct, tip: 'How loud this part is in the mix. The same as its fader on the Mixer screen. Double-click to reset.' },
+    { field: 'tone', label: 'Tone', fmt: v => (v > 0.995 ? 'Open' : pct(v)), tip: 'Turn down to make this part darker and softer, as if it were behind a curtain. All the way up (Open) leaves it untouched.' },
+    { field: 'space', label: 'Space', fmt: v => (v < 0.005 ? 'Off' : pct(v)), tip: 'How much reverb this part gets: the sound of a room or hall. More feels dreamy and far away, less stays close and punchy.' },
+    { field: 'echo', label: 'Echo', fmt: v => (v < 0.005 ? 'Off' : pct(v)), tip: 'How much of this part repeats as echoes. Lovely on melodies; keep it low on drums and bass so things stay clear.' },
+  ];
+  const knobs = defs.map(d => {
+    const k = UI.knob({ label: d.label, key: d.key, size: 'md', min: 0, max: 1, fmt: d.fmt, tip: d.tip,
+      get def() { return def[id()][d.field]; }, value: () => tr()[d.field], set: set(d.field, d.label.toLowerCase()) });
+    k.__ctl.label = name() + ' ' + d.label.toLowerCase();
+    return { k, d };
+  });
+  const el = h('div', 'track-knobs', knobs.map(x => x.k));
+  el.update = () => {
+    const t = id();
+    el.className = 'track-knobs c-' + BB.TRACK[t].color;
+    knobs.forEach(({ k, d }) => { k.update(); k.__ctl.label = name() + ' ' + d.label.toLowerCase(); k.setAttribute('aria-label', name() + ' ' + d.label.toLowerCase()); });
+  };
+  BB.on('change', el.update);
+  el.update();
+  return el;
+};
+
 /* Instrument picker for a track (grouped). Changing it plays a short preview. */
 UI.instrumentSelect = function (trackId, o = {}) {
   const opts = Object.entries(BB.INSTRUMENTS).sort((a, b) => BB.INSTRUMENT_GROUPS.indexOf(a[1].group) - BB.INSTRUMENT_GROUPS.indexOf(b[1].group)).map(([id, x]) => ({ id, label: x.name, group: x.group }));
@@ -331,6 +389,95 @@ UI.glide = function (container, selector, on, off) {
   const end = e => { if (!active.has(e.pointerId)) return; const cur = active.get(e.pointerId); active.delete(e.pointerId); if (cur) off(cur); };
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => container.addEventListener(ev, end));
 };
+
+/* ================= workspaces =================
+   A full-screen area that opens over a screen: the step grid, the piano roll, the pads. The transport bar stays
+   on top so Play, Record and Undo still work; the screen underneath goes inert until the workspace closes
+   (Close button, Esc, or the phone's Back). Append ws.el to the view's <section>, next to the main content.
+   o: {id, title, color, head: [elements after the title], cls, label, closeTip, onOpen(), onClose()}
+   returns {id, el, head, body, open({from}), close(), isOpen(), setColor(c)} */
+const WS = UI.workspaces = {};
+UI.ws = null; // the open workspace, if any
+let wsSkipPop = false;
+function wsMeasure() {
+  const tb = BB.$('#topbar');
+  const b = tb ? Math.max(0, tb.getBoundingClientRect().bottom) : 0;
+  document.documentElement.style.setProperty('--ws-top', Math.round(b) + 'px');
+}
+UI.workspace = function (o) {
+  const w = { id: o.id, from: null };
+  const close = UI.button({ label: 'Close', icon: UI.ICONS.close, cls: 'ws-close',
+    tip: o.closeTip || 'Close this and go back to the screen underneath. Shortcut: Esc.', onClick: () => w.close() });
+  w.titleText = h('span', 'ws-title-text', o.title);
+  w.head = h('div', 'ws-head', close, h('h2', 'ws-title', h('i', 'sw'), w.titleText), o.head || []);
+  w.body = h('div', 'ws-body');
+  w.el = h('div', { class: 'ws' + (o.cls ? ' ' + o.cls : ''), 'data-ws': o.id, role: 'dialog', 'aria-modal': 'true', 'aria-label': o.label || o.title, tabindex: '-1', hidden: true },
+    h('div', 'ws-inner', w.head, w.body));
+  w.setColor = c => { BB.TRACKS.forEach(t => w.el.classList.toggle('c-' + t.color, t.color === c)); };
+  if (o.color) w.setColor(o.color);
+  w.isOpen = () => UI.ws === w;
+  w.open = (opts = {}) => {
+    if (UI.ws === w) return;
+    const swap = !!UI.ws;
+    if (UI.ws) UI.ws.close({ keepHistory: true, swap: true });
+    w.from = opts.from || (document.activeElement !== document.body ? document.activeElement : null);
+    wsMeasure();
+    const sec = w.el.parentElement;
+    if (sec) for (const c of sec.children) if (!c.classList.contains('ws')) c.inert = true;
+    w.el.hidden = false;
+    w.el.classList.toggle('ws-swap', swap);
+    UI.ws = w;
+    document.documentElement.classList.add('ws-lock');
+    document.body.classList.add('ws-open');
+    BB.controls.clear(); BB.tooltip.hide();
+    try {
+      if (history.state && history.state.bbws) history.replaceState({ bbws: o.id }, '');
+      else history.pushState({ bbws: o.id }, '');
+    } catch (e) { /* sandboxed */ }
+    w.el.focus({ preventScroll: true });
+    if (o.onOpen) try { o.onOpen(); } catch (e) { console.error(e); }
+    BB.emit('workspace', { id: o.id, open: true });
+  };
+  /* opts: keepHistory (another workspace or screen takes over), fromPop (the Back button closed it) */
+  w.close = (opts = {}) => {
+    if (UI.ws !== w) return;
+    UI.ws = null;
+    w.el.hidden = true;
+    const sec = w.el.parentElement;
+    if (sec) for (const c of sec.children) if (!c.classList.contains('ws')) c.inert = false;
+    if (!opts.swap) { document.documentElement.classList.remove('ws-lock'); document.body.classList.remove('ws-open'); }
+    BB.controls.clear(); BB.tooltip.hide();
+    if (!opts.fromPop && !opts.keepHistory) {
+      try { if (history.state && history.state.bbws) { wsSkipPop = true; history.back(); } } catch (e) { /* sandboxed */ }
+    }
+    if (o.onClose) try { o.onClose(); } catch (e) { console.error(e); }
+    const from = w.from; w.from = null;
+    if (!opts.swap && from && from.isConnected && !from.closest('[hidden], [inert]')) { try { from.focus({ preventScroll: true }); } catch (e) { /* noop */ } }
+    BB.emit('workspace', { id: o.id, open: false });
+  };
+  WS[o.id] = w;
+  return w;
+};
+/* Open the workspace with this id, or close whatever is open (id null). Tutorials use this. */
+UI.showWorkspace = function (id) {
+  if (id == null) { if (UI.ws) UI.ws.close(); return; }
+  const w = WS[id]; if (w && !w.isOpen()) w.open();
+};
+/* A card on a screen that opens a workspace: title, a live preview you can tap, and a footer.
+   o: {title, color, pill, preview (element), tip, tipTitle, foot: [elements], button (the Open button), cls, id} */
+UI.wsCard = function (o) {
+  const prev = h('button', { class: 'ws-card-preview', 'aria-label': o.ariaLabel || o.title, 'data-tip': o.tip, 'data-tip-title': o.tipTitle || o.title, onclick: o.onOpen }, o.preview);
+  return h('section', { class: 'panel ws-card' + (o.color ? ' c-' + o.color : '') + (o.cls ? ' ' + o.cls : ''), id: o.id || null, 'aria-label': o.title },
+    h('div', 'panel-head', h('h3', null, h('i', 'sw'), o.title), o.pill || null, h('span', 'grow'), o.headExtra || null),
+    prev,
+    h('div', 'ws-card-foot', o.foot || [], h('span', 'grow'), o.button || null));
+};
+window.addEventListener('popstate', () => {
+  if (wsSkipPop) { wsSkipPop = false; return; }
+  if (UI.ws) { UI.ws.close({ fromPop: true }); return; }
+  BB.emit('popstate');
+});
+window.addEventListener('resize', () => { if (UI.ws) wsMeasure(); });
 
 /* ================= toast ================= */
 UI.toast = function (text, opts = {}) {
@@ -435,6 +582,14 @@ Tour.show = function () {
   const st = A.def.steps[A.i];
   if (st.view && st.view !== BB.state.view && BB.app) BB.app.setView(st.view);
   if (st.before) try { st.before(); } catch (e) { console.error(e); }
+  /* Open the workspace the target lives in, or close one when the target is on the screen itself.
+     A step can say which with ws: 'id' | null. Targets in the transport bar leave things as they are. */
+  let want = st.ws;
+  if (want === undefined) {
+    const t0 = typeof st.target === 'function' ? st.target() : (st.target ? BB.$(st.target) : null);
+    if (t0 && !t0.closest('.topbar, #tabs')) { const w = t0.closest('.ws'); want = w ? w.dataset.ws : null; }
+  }
+  if (want !== undefined) UI.showWorkspace(want);
   requestAnimationFrame(() => {
     if (!Tour.active) return;
     const tgt = typeof st.target === 'function' ? st.target() : (st.target ? BB.$(st.target) : null);
@@ -467,7 +622,8 @@ Tour.show = function () {
     if (r && BB.isMobile()) {
       const overlap = r.bottom - (card.getBoundingClientRect().top - 12);
       if (overlap > 0) {
-        window.scrollBy(0, Math.min(overlap, Math.max(0, r.top - 70)));
+        const box = tgt.closest('.ws-body'); // inside a workspace the page is locked; scroll the workspace instead
+        (box || window).scrollBy(0, Math.min(overlap, Math.max(0, r.top - (box ? box.getBoundingClientRect().top + 8 : 70))));
         const r2 = tgt.getBoundingClientRect(), pad = 6;
         Object.assign(shade.style, { left: r2.left - pad + 'px', top: r2.top - pad + 'px', width: r2.width + pad * 2 + 'px', height: r2.height + pad * 2 + 'px' });
       }

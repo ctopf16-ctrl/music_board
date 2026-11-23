@@ -1,7 +1,8 @@
 /* Beat Board · Keys screen
    A playable piano plus a piano-roll note editor for the note tracks (bass, melody, keys).
    It edits the clip at (BB.state.noteTrack, BB.state.scene).
-   Layout: header (track + scene) → note editor (tools + roll) → piano (sound, octave, keys). */
+   Layout: the screen itself holds the track and scene, the sound (instrument, volume and effects) and two cards.
+   Each card opens a full-screen workspace: the note editor (tools + piano roll) and the piano (playing live). */
 (function () {
 'use strict';
 const BB = window.BB, { h, clamp } = BB, UI = BB.ui, TR = BB.transport, T = BB.theory, C = BB.controls, I = UI.ICONS;
@@ -51,7 +52,7 @@ const S = {
   starter: {},        // 'track:scene' -> starter id last applied (lets arrows browse starters)
   rows: [], rowSig: '', rulerSig: '',
   sw: 20, rh: 18, kw: 52, steps: 32,
-  octs: 2,
+  octs: 2, prows: 1,  // piano: octaves per row, rows (phones stack two rows of one octave)
   sel: null,          // {s, m} of the selected note
   delShown: false,    // floating delete button (touch)
   drag: null, tap: null,
@@ -134,21 +135,50 @@ function mount(el) {
   const scenesWrap = h('div', 'kx-scenes', R.scenes);
   const context = h('div', 'kx-context', R.trackSeg, scenesWrap);
 
-  /* --- note editor panel --- */
+  /* --- sound panel (the screen itself) --- */
+  R.inst = {};
+  for (const t of TRACKS) { R.inst[t] = UI.instrumentSelect(t, { key: 'I', small: true }); releaseFocusAfterPick(R.inst[t]); }
+  R.knobs = UI.trackKnobs(track, { volKey: 'U' });
+  const soundPanel = h('section', { class: 'panel kx-sound', id: 'kx-sound', 'aria-label': 'Sound' },
+    h('div', 'panel-head', h('h3', null, h('i', 'sw'), 'Sound'), R.soundName = h('span', 'pill kx-sound-name'), h('p', 'hint kx-desk', 'Change these while the music plays to hear the difference.')),
+    h('div', 'kx-sound-row', field('Instrument', 'kx-f-inst', TRACKS.map(t => R.inst[t])), R.knobs));
+
+  /* --- card: the note editor --- */
   R.status = h('span', 'pill kx-status', h('i', 'sw'), h('span', 'kx-status-text', ''));
+  R.cardStatus = h('span', 'pill kx-status', h('i', 'sw'), h('span', 'kx-status-text', ''));
   R.starter = UI.select({
     label: 'Starter part', key: 'G', small: true,
     tip: 'A ready-made part that fits your chords. Pick one to fill this scene, then change the notes however you like. Arrow keys flip through them.',
-    options: () => [{ id: '', label: 'Pick a starter…' }].concat(BB.library.itemsFor(track()).map(it => ({ id: it.id, label: it.name, group: it.group }))),
+    options: () => [{ id: '', label: 'Starter parts…' }].concat(BB.library.itemsFor(track()).map(it => ({ id: it.id, label: it.name, group: it.group }))),
     value: starterValue, set: applyStarter,
   });
   R.starter.classList.add('kx-starter');
   releaseFocusAfterPick(R.starter);
+  R.miniNotes = h('div', 'kx-mini-notes');
+  R.miniPh = h('i', 'kx-mini-ph');
+  R.miniEmpty = h('span', 'kx-mini-empty', '');
+  R.mini = h('div', { class: 'kx-mini', 'aria-hidden': 'true' }, R.miniNotes, R.miniPh, R.miniEmpty);
+  R.openEd = UI.button({ label: 'Edit notes', key: 'E', icon: I.edit, cls: 'colored ws-go',
+    tip: 'Open the note editor full screen: draw, move and stretch notes on a piano roll. Close it (or press Esc) to come back.', onClick: () => R.wsEd.open({ from: R.openEd }) });
+  const edCard = UI.wsCard({ id: 'kx-ed-card', title: 'Note editor', cls: 'kx-card kx-ed-card', pill: R.cardStatus,
+    preview: R.mini, onOpen: () => R.wsEd.open({ from: R.openEd }), ariaLabel: 'Open the note editor', tipTitle: 'Your notes',
+    tip: 'A picture of this part: each bar is a note, higher notes sit higher. Tap it to open the note editor.',
+    foot: [R.starter], button: R.openEd });
+
+  /* --- card: the piano --- */
+  R.miniPiano = h('div', { class: 'pkeys kx-mini-piano', 'aria-hidden': 'true' });
+  R.openPlay = UI.button({ label: 'Play piano', key: 'A', icon: I.tap, cls: 'colored ws-go',
+    tip: 'Open a big piano full screen to play freely. Turn on Record to add what you play to the loop.', onClick: () => R.wsPlay.open({ from: R.openPlay }) });
+  const playCard = UI.wsCard({ id: 'kx-play-card', title: 'Piano', cls: 'kx-card kx-play-card ws-card-side',
+    preview: h('div', 'kx-mini-piano-wrap', R.miniPiano), onOpen: () => R.wsPlay.open({ from: R.openPlay }), ariaLabel: 'Open the piano', tipTitle: 'Piano',
+    tip: 'A playable piano for freestyling. Tap here to open it big.',
+    foot: [h('p', 'hint kx-card-hint', h('span', 'kx-desk', 'Your computer keys play it from here too.'), h('span', 'kx-phone', 'Freestyle, or record a take.'))], button: R.openPlay });
+
+  root.append(head, context, soundPanel, h('div', 'kx-cards', edCard, playCard));
+
+  /* --- workspace: the note editor --- */
   const editorInfo = infoButton('How to edit notes',
     'Click an empty spot to add a note. Drag a note to move it, drag its right edge to make it longer. Double-click or right-click a note to delete it. On a phone: tap to add, tap a note to get a delete button. A selected note moves with the arrow keys, and Delete removes it.', 'Drawing notes');
-  const editorHead = h('div', 'panel-head kx-editor-head', h('h3', null, 'Note editor'), editorInfo, R.status, h('span', 'grow'),
-    h('div', 'kx-inline', h('span', 'lbl', 'Starter'), R.starter));
-
   R.tool = UI.seg({
     label: 'Tool', key: 'D', small: true,
     tip: 'Draw adds and moves notes. Erase removes the notes you click or drag across.',
@@ -214,11 +244,25 @@ function mount(el) {
   R.roll = h('div', 'kx-roll', R.inner);
   R.empty = h('div', 'kx-empty', h('div', null, h('b', null, 'No notes here yet'), h('span', 'kx-empty-text', '')));
   R.rollWrap = h('div', 'kx-rollwrap', R.roll, R.empty);
-  const editor = h('section', { class: 'panel kx-editor', 'aria-label': 'Note editor' }, editorHead, R.tools, R.rollWrap);
 
-  /* --- piano panel --- */
-  R.inst = {};
-  for (const t of TRACKS) { R.inst[t] = UI.instrumentSelect(t, { key: 'I', small: true }); releaseFocusAfterPick(R.inst[t]); }
+  const trackSel = () => {
+    const sel = UI.select({ label: 'Track', key: 'P', small: true, tip: 'Which part you are working on: Bass, Melody or Keys.',
+      options: TRACKS.map(id => ({ id, label: BB.TRACK[id].name })), value: track, set: id => { if (id !== track()) BB.setState({ noteTrack: id }); } });
+    sel.classList.add('kx-track-sel'); releaseFocusAfterPick(sel);
+    return sel;
+  };
+  R.edTrack = trackSel();
+  R.wsEd = UI.workspace({ id: 'keys-editor', title: 'Notes', label: 'Note editor', cls: 'kx-ws kx-edws ws-tight',
+    closeTip: 'Close the note editor and go back to the Keys screen. Shortcut: Esc.',
+    head: [editorInfo, R.status, h('span', 'grow'), R.edTrack, UI.sceneSelect({ track: track, key: 'S' })],
+    onOpen: () => { S.lastW = 0; requestAnimationFrame(() => renderAll({ scroll: true })); },
+    onClose: () => { S.drag = null; S.tap = null; S.sel = null; S.delShown = false; hideGhost(); R.del.hidden = true; } });
+  R.wsEd.body.append(R.tools, R.rollWrap);
+  el.append(R.wsEd.el);
+
+  /* --- workspace: the piano --- */
+  R.instPlay = {};
+  for (const t of TRACKS) { R.instPlay[t] = UI.instrumentSelect(t, { key: 'I', small: true }); releaseFocusAfterPick(R.instPlay[t]); }
   R.oct = UI.stepper({
     label: 'Octave', key: 'Z', min: 0, max: 8, fmt: v => 'C' + v,
     tip: 'Which notes the piano and your computer keys play. Lower numbers sound deeper, higher ones brighter. Shortcut: Z and X.',
@@ -226,18 +270,22 @@ function mount(el) {
   });
   const pianoInfo = infoButton('About the piano',
     'Click, tap or slide across the keys to play. On a computer, the letters on the keys play them too. Keys with a dot are in your song’s key; the big dot is the home note. Turn on Record to add what you play to the loop.', 'Piano');
-  R.piano = h('div', { class: 'pkeys kx-piano', role: 'group', 'aria-label': 'Piano. Play it with A W S E D F T G Y H U J K on your keyboard. Z and X change the octave.' });
-  const pianoHead = h('div', 'panel-head kx-piano-head',
-    h('h3', null, 'Piano'), pianoInfo,
-    h('div', 'kx-inline', h('span', 'lbl', 'Sound'), TRACKS.map(t => R.inst[t])),
-    h('div', 'kx-inline', h('span', 'lbl', 'Octave'), R.oct),
-    h('span', 'grow'),
-    h('p', 'hint kx-keyhint kx-desk', h('kbd', null, 'A'), '–', h('kbd', null, "'"), ' play notes · ', h('kbd', null, 'Z'), ' ', h('kbd', null, 'X'), ' octave'));
+  R.piano = h('div', { class: 'kx-piano', role: 'group', 'aria-label': 'Piano. Play it with A W S E D F T G Y H U J K on your keyboard. Z and X change the octave.', 'data-no-press-tip': '' });
   R.hint = h('p', 'hint kx-hint', h('span', 'kx-recdot', ''),
-    h('span', null, 'Turn on Record', h('span', 'kx-desk', ' (', h('kbd', null, 'R'), ')'), ' and play the piano', h('span', 'kx-desk', ' or your computer keys'), '. Notes snap to the grid.'));
-  const pianoPanel = h('section', { class: 'panel kx-keys', 'aria-label': 'Piano' }, pianoHead, R.piano, R.hint);
-
-  root.append(head, context, editor, pianoPanel);
+    h('span', null, 'Turn on Record', h('span', 'kx-desk', ' (', h('kbd', null, 'R'), ')'), ' at the top and play', h('span', 'kx-desk', ' the keys or your computer keyboard'), '. Notes snap to the grid.'));
+  R.playTrack = trackSel();
+  R.wsPlay = UI.workspace({ id: 'keys-piano', title: 'Piano', cls: 'kx-ws kx-playws ws-tight',
+    closeTip: 'Close the piano and go back to the Keys screen. Shortcut: Esc.',
+    head: [pianoInfo, h('span', 'grow'), R.playTrack, UI.sceneSelect({ track: track, key: 'S' })],
+    onOpen: () => { S.pianoSig = ''; requestAnimationFrame(() => { sizePiano(); renderPiano(); }); } });
+  R.wsPlay.body.append(
+    h('div', 'kx-piano-ctl',
+      h('div', 'kx-inline', h('span', 'lbl', 'Sound'), TRACKS.map(t => R.instPlay[t])),
+      h('div', 'kx-inline', h('span', 'lbl', 'Octave'), R.oct),
+      h('span', 'grow'),
+      h('p', 'hint kx-keyhint kx-desk', h('kbd', null, 'A'), '–', h('kbd', null, "'"), ' play notes · ', h('kbd', null, 'Z'), ' ', h('kbd', null, 'X'), ' octave')),
+    R.piano, R.hint);
+  el.append(R.wsPlay.el);
 
   /* --- behaviour --- */
   wireRoll();
@@ -250,11 +298,7 @@ function mount(el) {
     if (!isActive() || !R.roll.clientWidth) return;
     if (R.roll.clientWidth !== S.lastW) { S.lastW = R.roll.clientWidth; renderRoll(); }
   }).observe(R.roll);
-  new ResizeObserver(() => {
-    const w = R.piano.clientWidth; if (!w) return;
-    const o = w < 560 ? 1 : 2;
-    if (o !== S.octs) { S.octs = o; renderPiano(); }
-  }).observe(R.piano);
+  new ResizeObserver(() => { if (sizePiano()) renderPiano(); }).observe(R.piano);
 
   BB.on('ui', d => {
     if (!isActive()) return;
@@ -271,12 +315,25 @@ function mount(el) {
   }, true);
   window.addEventListener('blur', () => S.keyHeld.clear());
 
-  S.octs = BB.isMobile() ? 1 : 2;
+  S.octs = BB.isMobile() ? 1 : 2; S.prows = BB.isMobile() ? 2 : 1;
   renderAll();
 }
+/* Phones stack two one-octave rows; wider screens show one row of two (or three) octaves. True if it changed. */
+function sizePiano() {
+  const w = R.piano.clientWidth; if (!w) return false;
+  const rows = w < 560 ? 2 : 1, octs = w < 560 ? 1 : w < 1100 ? 2 : 3;
+  if (rows === S.prows && octs === S.octs) return false;
+  S.prows = rows; S.octs = octs;
+  return true;
+}
+const edOpen = () => !!(R.wsEd && R.wsEd.isOpen());
 
 function syncRootClass() {
-  S.root.className = 'kx c-' + color() + (S.tool === 'erase' ? ' kx-erasing' : '') + (S.drag && S.drag.type !== 'erase' ? ' kx-dragging' : '');
+  const c = color();
+  S.root.className = 'kx c-' + c;
+  for (const w of [R.wsEd, R.wsPlay]) w.setColor(c);
+  R.wsEd.el.classList.toggle('kx-erasing', S.tool === 'erase');
+  R.wsEd.el.classList.toggle('kx-dragging', !!(S.drag && S.drag.type !== 'erase'));
 }
 
 /* ================= rendering ================= */
@@ -290,10 +347,11 @@ function renderAll(opts = {}) {
 function syncHeader() {
   const t = track(), tr = BB.TRACK[t], p = BB.store.p, c = clip(), n = c ? c.notes.length : 0;
   syncRootClass();
-  R.sub.textContent = tr.name + ': ' + tr.desc.charAt(0).toLowerCase() + tr.desc.slice(1) + '. Play the piano, or draw notes in the grid.';
-  R.trackSeg.update(); R.scenes.update();
-  for (const id of TRACKS) R.inst[id].hidden = id !== t;
-  R.inst[t].update();
+  R.sub.textContent = tr.name + ': ' + tr.desc.charAt(0).toLowerCase() + tr.desc.slice(1) + '. Open the note editor to draw notes, or the piano to play.';
+  R.trackSeg.update(); R.scenes.update(); R.edTrack.update(); R.playTrack.update(); R.knobs.update();
+  for (const id of TRACKS) { R.inst[id].hidden = id !== t; R.instPlay[id].hidden = id !== t; }
+  R.inst[t].update(); R.instPlay[t].update();
+  R.soundName.textContent = tr.name;
   if (R.starter.dataset.track !== t) { R.starter.dataset.track = t; R.starter.refill(); } else R.starter.update();
   R.tool.update(); R.len.update(); R.inKey.update(); R.bars.update(); R.oct.update(); R.moreBtn.update();
   const sceneName = p.scenes[scene()].name;
@@ -373,8 +431,27 @@ function renderNotes() {
 }
 function syncStatusOnly() {
   const c = clip(), n = c ? c.notes.length : 0;
-  const el = R.status.querySelector('.kx-status-text');
-  el.textContent = BB.store.p.scenes[scene()].name + ' · ' + plural(bars(), 'bar') + ' · ' + (n ? plural(n, 'note') : 'empty');
+  const text = BB.store.p.scenes[scene()].name + ' · ' + plural(bars(), 'bar') + ' · ' + (n ? plural(n, 'note') : 'empty');
+  for (const pill of [R.status, R.cardStatus]) pill.querySelector('.kx-status-text').textContent = text;
+  renderMini();
+}
+/* The card's little picture of the part: notes as bars, scaled to fit, plus the playhead */
+function renderMini() {
+  const c = clip(), steps = bars() * 16, notes = c ? c.notes : [];
+  R.mini.style.setProperty('--bars', bars());
+  R.miniNotes.textContent = '';
+  R.miniEmpty.hidden = notes.length > 0;
+  R.miniEmpty.textContent = 'No ' + BB.TRACK[track()].name.toLowerCase() + ' notes in this scene yet. Tap here to draw some, or pick a starter part.';
+  if (!notes.length) return;
+  let lo = Infinity, hi = -Infinity;
+  for (const n of notes) { lo = Math.min(lo, n.m); hi = Math.max(hi, n.m); }
+  const padd = Math.max(1, Math.ceil((12 - (hi - lo)) / 2)); lo -= padd; hi += padd;
+  const span = hi - lo + 1;
+  for (const n of notes) {
+    const el = h('i', 'kx-mn');
+    el.style.cssText = `left:${n.s / steps * 100}%;width:max(3px, calc(${n.d / steps * 100}% - 2px));top:${(hi - n.m) / span * 100}%;height:max(3px, calc(${100 / span}% - 1px));--v:${n.v}`;
+    R.miniNotes.append(el);
+  }
 }
 
 /* Scroll the roll so the notes (or the middle of the track's range) are in view */
@@ -404,24 +481,38 @@ function ensureVisible(n) {
   else if (x + n.d * S.sw > R.roll.scrollLeft + visW) R.roll.scrollLeft = x + n.d * S.sw - visW + S.sw;
 }
 
-function renderPiano() {
-  if (!S.root) return;
-  const t = track(), p = BB.store.p, base = 12 * (octave() + 1);
-  const octs = S.octs, count = octs * 12 + 1, nW = octs * 7 + 1, bw = 100 / nW * 0.62;
-  /* Rebuild only when the keys really change: swapping elements under a held finger would retrigger notes */
-  const sig = [t, base, octs, p.key, p.mode].join('|');
-  if (sig === S.pianoSig) { paintSounding(); return; }
-  S.pianoSig = sig;
-  R.piano.innerHTML = '';
+function pianoKeys(row, base, octs, letterBase, letters) {
+  const t = track(), p = BB.store.p, count = octs * 12 + 1, nW = octs * 7 + 1, bw = 100 / nW * 0.62;
   let wi = 0;
   for (let i = 0; i < count; i++) {
     const m = base + i, pc = m % 12, black = BLACK.has(pc);
     const k = h('div', { class: 'pkey ' + (black ? 'black' : 'white') + (T.inScale(pc, p.key, p.mode) ? ' inkey' : '') + (pc === p.key ? ' root' : '') + (S.lit.has(t + ':' + m) ? ' lit' : ''), dataset: { midi: m } });
-    if (!black && pc === 0) k.append(h('span', 'kname', 'C' + (Math.floor(m / 12) - 1)));
-    if (i < LETTERS.length) k.append(h('span', 'klet', LETTERS[i]));
+    if (letters) {
+      if (!black && pc === 0) k.append(h('span', 'kname', 'C' + (Math.floor(m / 12) - 1)));
+      const li = m - letterBase;
+      if (li >= 0 && li < LETTERS.length) k.append(h('span', 'klet', LETTERS[li]));
+    }
     if (black) { k.style.left = `calc((100% + 3px) * ${wi / nW} - 1.5px - ${bw / 2}%)`; k.style.width = bw + '%'; } else wi++;
-    R.piano.append(k);
+    row.append(k);
   }
+}
+function renderPiano() {
+  if (!S.root) return;
+  const t = track(), p = BB.store.p, base = 12 * (octave() + 1);
+  const octs = S.octs, rows = S.prows;
+  /* Rebuild only when the keys really change: swapping elements under a held finger would retrigger notes */
+  const sig = [t, base, octs, rows, p.key, p.mode].join('|');
+  if (sig === S.pianoSig) { paintSounding(); return; }
+  S.pianoSig = sig;
+  R.piano.innerHTML = '';
+  R.piano.style.setProperty('--rows', rows);
+  for (let r = rows - 1; r >= 0; r--) { // the top row plays the higher notes
+    const row = h('div', 'pkeys kx-piano-row');
+    pianoKeys(row, base + r * octs * 12, octs, base, true);
+    R.piano.append(row);
+  }
+  R.miniPiano.innerHTML = '';
+  pianoKeys(R.miniPiano, base, 2, base, false);
   paintSounding();
 }
 
@@ -716,7 +807,8 @@ function onNoteEvent(d) {
   const k = d.track + ':' + d.midi;
   if (d.on) S.lit.add(k); else S.lit.delete(k);
   if (!S.root || d.track !== track()) return;
-  const pk = R.piano.querySelector('[data-midi="' + d.midi + '"]'); if (pk) pk.classList.toggle('lit', d.on);
+  R.piano.querySelectorAll('[data-midi="' + d.midi + '"]').forEach(pk => pk.classList.toggle('lit', d.on));
+  R.miniPiano.querySelectorAll('[data-midi="' + d.midi + '"]').forEach(pk => pk.classList.toggle('lit', d.on));
   const rk = R.keycol.querySelector('[data-midi="' + d.midi + '"]'); if (rk) rk.classList.toggle('lit', d.on);
 }
 /* While the loop plays, the notes under the playhead glow on the roll and on both keyboards */
@@ -724,6 +816,7 @@ function paintSounding() {
   const ms = new Set();
   if (S.noteEls) for (const ne of S.noteEls) if (S.sounding.has(ne.i)) ms.add(ne.m);
   R.piano.querySelectorAll('.pkey').forEach(k => k.classList.toggle('kx-play', ms.has(+k.dataset.midi)));
+  R.miniPiano.querySelectorAll('.pkey').forEach(k => k.classList.toggle('kx-play', ms.has(+k.dataset.midi)));
   R.keycol.querySelectorAll('.kx-key').forEach(k => k.classList.toggle('kx-play', ms.has(+k.dataset.midi)));
 }
 
@@ -732,6 +825,8 @@ function step(e) {
   if (!S.root) return;
   const pos = e && e.pos && e.pos[track()];
   const show = !!(pos && pos.scene === scene());
+  R.miniPh.style.display = show ? 'block' : 'none';
+  if (show) R.miniPh.style.left = (pos.pos / (bars() * 16) * 100) + '%';
   if (!show) {
     R.ph.style.display = 'none';
     if (S.sounding.size) { S.sounding.clear(); for (const ne of S.noteEls || []) ne.el.classList.remove('on'); paintSounding(); }
@@ -766,6 +861,7 @@ function keydown(e) {
     return true;
   }
   if (code === 'KeyZ' || code === 'KeyX') { if (!e.repeat) setOctave(octave() + (code === 'KeyX' ? 1 : -1), true); return true; }
+  if (!edOpen()) return false; // the rest edits the piano roll, so only while the note editor is open
   if ((e.key === 'Delete' || e.key === 'Backspace') && S.sel) { deleteSelected(); return true; }
   if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
     const dir = e.key === 'ArrowUp' ? 1 : -1;
@@ -789,35 +885,24 @@ function releaseKeys() { for (const v of S.keyHeld.values()) TR.noteOff(v.track,
 
 /* ================= tutorial ================= */
 const $v = sel => BB.$('.view[data-view="keys"] ' + sel);
-/* On phones the tour card sits over the bottom of the screen, so the piano (last on the page) could never
-   scroll above it. Give the page extra room below while this tour runs. */
-function tourRoom() {
-  if (!S.root) return;
-  S.root.classList.add('kx-touring');
-  clearInterval(S.tourIv);
-  S.tourIv = setInterval(() => {
-    const A = BB.tutorial.active;
-    if (!A || A.id !== VIEW) { S.root.classList.remove('kx-touring'); clearInterval(S.tourIv); }
-  }, 400);
-}
 const mobileText = (desk, phone) => () => (BB.isMobile() ? phone : desk);
 const tutorial = [
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-tracks'), title: 'Three note tracks',
-    get text() { return '<b>Bass</b> plays the low notes that hold the song together. <b>Melody</b> is the tune people hum. <b>Keys</b> adds extra parts like arpeggios and riffs. Pick one here; everything below edits it, in the scene you pick next to it.'; } },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-piano'), title: 'Play the piano',
-    get text() { return mobileText('Click or slide across the keys. Your computer keyboard works too: <b>A S D F G H J K</b> are white keys and <b>W E T Y U O P</b> are black keys. <b>Z</b> and <b>X</b> move down or up an octave.', 'Tap the keys, or press and slide across them. The <b>Octave</b> buttons above the keys move the piano lower or higher.')(); } },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-piano .pkey.root') || $v('.kx-piano'), title: 'Dots mean "in key"',
-    text: 'Keys with a dot belong to your song’s key, so they always sound good together. The <b>big dot</b> is the home note: melodies love to start and end there.' },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-rollwrap'), title: 'Draw notes',
+  { view: VIEW, target: () => $v('.kx-tracks'), title: 'Three note tracks',
+    text: '<b>Bass</b> plays the low notes that hold the song together. <b>Melody</b> is the tune people hum. <b>Keys</b> adds extra parts like arpeggios and riffs. Pick one here, and a scene next to it.' },
+  { view: VIEW, target: () => $v('#kx-sound'), title: 'Shape the sound',
+    text: 'This screen is home base for the track. Pick its <b>Instrument</b>, then set its volume, tone, reverb (Space) and echo. Try it while the music plays.' },
+  { view: VIEW, target: () => $v('#kx-ed-card'), title: 'Your notes at a glance',
+    text: 'This picture shows the notes of this track in this scene. <b>Tap it</b> (or <b>Edit notes</b>) to open the note editor full screen. <b>Play piano</b> opens a big piano.' },
+  { view: VIEW, target: () => $v('.kx-rollwrap'), title: 'Draw notes',
     get text() { return mobileText('Each row is a note and each column is a step in time. <b>Click</b> an empty spot to add a note, <b>drag</b> a note to move it, and drag its <b>right edge</b> to make it longer. <b>Double-click</b> or right-click a note to delete it.', 'Each row is a note and each column is a step in time. <b>Tap</b> an empty spot to add a note and <b>drag</b> a note to move it. Tap a note to get a <b>delete</b> button.')(); } },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-f-len'), title: 'Note length',
-    text: 'New notes get this length. <b>1/8</b> is a good start. <b>1/16</b> is quick and bouncy; <b>1 bar</b> is a long, held note. Notes also snap to this grid.' },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-inkey'), title: 'Only notes in key',
-    text: 'With this on, the grid only shows notes from your song’s key, so you can’t hit a wrong note. Turn it off to see all 12 notes; the shaded rows are outside the key.' },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-hint'), title: 'Record what you play',
+  { view: VIEW, target: () => $v('.kx-tools'), title: 'Length and key',
+    text: 'New notes get the <b>Note length</b> you pick: <b>1/8</b> is a good start. <b>In key</b> shows only notes from your song’s key, so you can’t hit a wrong note. <b>Close</b> (or Esc) takes you back.' },
+  { view: VIEW, target: () => $v('.kx-piano'), title: 'Play the piano',
+    get text() { return mobileText('Click or slide across the keys. Your computer keyboard works too: <b>A S D F G H J K</b> are white keys and <b>W E T Y U O P</b> are black keys. <b>Z</b> and <b>X</b> move an octave. Keys with a dot are in your key; the big dot is the home note.', 'Tap the keys, or press and slide across them. The top row is one octave higher. Keys with a dot are in your key; the big dot is the home note.')(); } },
+  { view: VIEW, target: () => $v('.kx-hint'), title: 'Record what you play',
     get text() { return 'Turn on <b>Record</b>' + (BB.isMobile() ? '' : ' (<b>R</b>)') + ' at the top, then play. Your notes land in time with the beat and keep looping. Not happy with a take? <b>Undo</b> removes it.'; } },
-  { view: VIEW, before: tourRoom, target: () => $v('.kx-starter'), title: 'Try this',
-    text: 'Pick a <b>Starter part</b>, press <b>Play</b>, then drag a few notes up or down to make it your own. Then switch to <b>Bass</b> and do the same. You just wrote a song part!' },
+  { view: VIEW, target: () => $v('.kx-starter'), title: 'Try this',
+    text: 'Pick a <b>Starter part</b>, press <b>Play</b>, then open the note editor and drag a few notes up or down to make it your own. Then switch to <b>Bass</b> and do the same.' },
 ];
 
 BB.views.register({

@@ -14,7 +14,7 @@ js/core.js            helpers, events, music theory, song model, store (undo/sav
 js/audio.js           instruments, drum kits, BB.createEngine (mixer + effects), BB.audio (live), BB.preview
 js/transport.js       clock, clip launching, song playback, live playing + recording, offline render, WAV
 js/ui.js              UI kit: knob, fader, seg, select, toggle, button, stepper, scenePicker, pickers,
-                      keyboard control system, tooltips, toasts, sheets, tutorials, icons
+                      keyboard control system, tooltips, toasts, sheets, workspaces, tutorials, icons
 js/library.js         starter loops for every track, chord progressions, the demo song
 js/midi.js            MIDI keyboard input
 js/views/<id>.js      one file per screen: loops, beat, keys, chords, mixer, song
@@ -37,10 +37,17 @@ js/app.js             boots everything: transport bar, tabs, global keys, menus,
 - Shared classes: `.view-head .view-title .view-sub`, `.panel .panel-head .hint`, `.empty`, `.pill`, `.row`,
   `.grow`, `.btn` (+ `.sm .ghost .primary .danger .icon-only .toggle .colored`), `.seg`, `.sel`,
   `.pkeys .pkey.white/.black/.lit` (piano look).
+- **Screens with an editor (Beat, Keys, Chords) are a hub plus workspaces.** The screen itself (the hub) holds only
+  the sound controls (instrument or kit, flavor, swing, `UI.trackKnobs`) and two cards (`UI.wsCard`), each with a live
+  preview. One card opens the editor workspace (where notes and timing are placed: step grid, piano roll, progression
+  and rhythm), the other opens the play workspace (pads, piano, chord pads and melody strip, for freestyling). A
+  workspace (`UI.workspace`) is a full-screen area over the screen; the transport bar stays on top. Keep each hub short
+  enough to fit a phone screen without scrolling, and put anything that edits the pattern inside the editor workspace.
+  See **Workspaces** below.
 - **Phones (≤ 720px).** The tabs become a fixed bottom bar, and `--nav-h` holds its height. The transport bar is one row
   (Play, Record, Tempo, Undo, ⌄, Menu); the ⌄ button (`app.showMore(open)`) opens the rest as a second row. Screen
   subtitles (`.view-sub`) are hidden, so keep each `.view-head` to the title and its buttons. `.phone-only` hides an element above 720px. Views stack
-  into one column. Touch targets must be at least 40px. The page body must never scroll sideways: wide
+  into one column. Workspaces cover the bottom tabs. Touch targets must be at least 40px. The page body must never scroll sideways: wide
   editors (piano roll, long patterns) scroll inside their own `overflow-x: auto` box. Hover tooltips
   become press-and-hold, and keyboard letters are hidden.
 - Respect `prefers-reduced-motion` (app.css already disables animations globally).
@@ -166,8 +173,37 @@ Every option bag accepts `tip` (tooltip text), `key` (keyboard letter) and `labe
 - `glide(container, selector, onEl, offEl)`: press and slide across keys/pads
 - `toast(text, {action:{label, onClick}, replace: 'id', ms})` returns the toast element. A newer toast with the same `replace` id replaces the older one.
 - `sheet({title, body, actions:[{label, primary, danger, onClick}], wide})` returns `{close}`
+- `sceneSelect({track, key})`: a compact scene picker (native select) for workspace headers; a dot marks scenes with a clip
+- `trackKnobs(trackId | () => trackId, {volKey})`: the track's Volume, Tone, Space and Echo dials (the same values as its Mixer strip)
+- `workspace({...})`, `wsCard({...})`, `showWorkspace(id | null)`: see **Workspaces**
 - `UI.ICONS.*`: inline SVG strings (play, stop, rec, plus, trash, copy, edit, dice, download, …)
 - `BB.h(tag, attrs, ...children)`: tiny element builder (`{class, html, text, style:{}, dataset:{}, onclick, 'data-tip': …}`)
+
+## Workspaces (`UI.workspace`)
+
+```js
+const ws = UI.workspace({
+  id: 'beat-grid', title: 'Step grid', color: 'drums', cls: 'beat-ws',   // add 'ws-tight' when the head is crowded on phones
+  head: [pill, h('span', 'grow'), UI.sceneSelect({ track: 'drums', key: 'S' })], // after the Close button and title
+  closeTip: 'Close the step grid… Shortcut: Esc.', onOpen() {}, onClose() {},
+});
+ws.body.append(tools, grid);      // ws.body is a flex column that scrolls if it must; give the main editor flex: 1
+el.append(ws.el);                 // into the view's <section>, next to the hub content (not inside it)
+ws.open({ from: button }); ws.close(); ws.isOpen(); ws.setColor('melody');
+```
+- Opening makes everything else in the view's section `inert`, locks page scrolling (`html.ws-lock`), and pushes a
+  history entry so the phone's Back button closes it. `Esc` closes it too (after a picked control and the view's own
+  `Escape` handling). Switching screens closes it. `BB.ui.ws` is the open workspace; `BB.ui.workspaces[id]` finds one.
+- Controls under an open workspace can't be picked by letter (inert counts as hidden), so a workspace may reuse a
+  letter from the hub for the same kind of control (the scene picker keeps `S`). Letters must be unique among what is
+  visible at once: the hub, or one workspace.
+- A view's `keydown` keeps playing notes, pads and drums whatever is open, but editing keys (grid cursor, nudging notes,
+  Delete) should only act while the editor workspace is open.
+- `UI.wsCard({title, color, pill, preview, onOpen, tip, foot: [...], button})` is the hub card: a live preview you can
+  tap, a footer (starters), and the Open button (`cls: 'colored ws-go'`; pencil icon for editors, hand icon for play).
+  Add `ws-card-side` to put the button beside the preview on phones.
+- Tutorials open the workspace their target lives in, or close it when the target is on the hub. Set `ws: 'id'` (or
+  `null`) on a step when the target moves between workspaces (the Chords pads do) or isn't built yet.
 
 ## Keyboard (the user cares about this a lot)
 
@@ -178,8 +214,8 @@ Global keys are handled in `app.js`:
   Pressing the letter picks it (outline plus a HUD at the bottom). Then **← →** change it (Shift moves faster),
   **↑ ↓** move to the previous/next control, and **Enter** presses it. `Esc` lets go.
 - **Reserved letters** (transport bar, global): **R** record, **T** tempo, **L** loop/song, **M** metronome, **K** key, **J** scale, **V** volume.
-  Views may use any other letter. Letters must be unique within a view.
-- `[` and `]` switch screens. `?` opens help. Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z redo, Ctrl/⌘+S save.
+  Views may use any other letter. Letters must be unique within a view (or, with workspaces, within what is visible at once).
+- `[` and `]` switch screens. `?` opens help. `Esc` lets go of a picked control, then closes an open workspace, then stops playback. Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z redo, Ctrl/⌘+S save.
 - **Order for letters and digits:** `view.keydown(e)` runs first (return `true` if you used the key), then control
   letters, then the top-row digits 1–0 fall back to drums. With **Shift**, letters always go to controls first.
 - Views where letters play notes (Keys, Chords) set `letterMode: 'notes'`. Their badges then show ⇧, and controls
@@ -226,5 +262,7 @@ Use Playwright (`require('playwright')`, `chromium.launch()` needs no options). 
 2. Desktop 1280×860 and phone 390×844 (`isMobile: true, hasTouch: true`) both look right.
    `document.documentElement.scrollWidth` must equal the viewport width (no sideways page scroll).
 3. Click and keyboard paths work. `localStorage.setItem('beatboard.welcomed','true')` skips the welcome dialog.
-   Go to a screen with `location.hash = '#beat'` before load, or call `BB.app.setView('beat')`.
+   Go to a screen with `location.hash = '#beat'` before load, or call `BB.app.setView('beat')`. Open a workspace with
+   `BB.ui.workspaces['beat-grid'].open()` (ids: `beat-grid`, `beat-pads`, `keys-editor`, `keys-piano`, `chords-editor`,
+   `chords-play`) and check it too, including that the hub fits a 390×844 phone without scrolling.
 4. Light and dark: `document.documentElement.setAttribute('data-theme','dark')`.

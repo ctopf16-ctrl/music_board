@@ -390,7 +390,7 @@ function refreshTools() {
   }
   T.swap.dataset.tipTitle = swapLabel;
   T.swap.dataset.tip = clip ? 'Replace this loop with a different ready-made one. Try a few until it feels right.' : `Pick a ready-made ${tr.name} loop for this square, or start a blank one.`;
-  T.edit.dataset.tip = `Opens this loop in the ${editorOf(tr.id)} screen so you can change ${whatOf(tr.type)}.`;
+  T.edit.dataset.tip = `Opens this loop full screen in the ${editorOf(tr.id)} screen’s editor so you can change ${whatOf(tr.type)}. Close it to land on that screen.`;
   T.paste.classList.toggle('is-off', !clipboard);
   T.paste.setAttribute('aria-disabled', String(!clipboard));
   T.len.update(); T.lenSel.update();
@@ -507,12 +507,13 @@ function toggleMix(id, key) {
   BB.store.change((v ? '' : 'Un') + (key === 'mute' ? 'mute ' : 'solo ') + name, p => { p.tracks[id][key] = v; }, { info: { track: id } });
 }
 
+/* Edit a loop: go to its screen and open the editor there straight away (step grid, progression or note editor) */
 function goEdit(t, s) {
   const id = TRACKS[t].id;
   if (BB.state.scene !== s) BB.setState({ scene: s });
-  if (id === 'drums') BB.app.setView('beat');
-  else if (id === 'chords') BB.app.setView('chords');
-  else { BB.setState({ noteTrack: id }); BB.app.setView('keys'); }
+  if (id === 'drums') { BB.app.setView('beat'); UI.showWorkspace('beat-grid'); }
+  else if (id === 'chords') { BB.app.setView('chords'); UI.showWorkspace('chords-editor'); }
+  else { BB.setState({ noteTrack: id }); BB.app.setView('keys'); UI.showWorkspace('keys-editor'); }
 }
 
 function duplicateSel() {

@@ -144,7 +144,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .panel { background: var(--raise); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 14px; display: grid; gap: 12px; min-width: 0; align-content: start; }
 .panel.flat { background: var(--panel); }
 .panel-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
-.panel-head h3 { margin: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.panel-head h3 { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
 .hint { margin: 0; font-size: 13px; color: var(--ink-2); }
 .empty { display: grid; place-items: center; gap: 10px; text-align: center; padding: 28px 16px; color: var(--ink-2); border: 1.5px dashed var(--line); border-radius: var(--r); }
 .empty h4 { margin: 0; color: var(--ink); font-size: 16px; }
@@ -161,6 +161,42 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .scene-btn.has::after { content: ""; position: absolute; top: 7px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--c, var(--ink-2)); }
 .scene-btn[aria-pressed="true"] { border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink) inset; background: var(--raise); }
 .scene-btn.playing .num::after { content: " ▶"; color: var(--good); }
+
+/* ================= workspaces =================
+   Full-screen areas that open over a screen (UI.workspace): the step grid, the note editor, the pads.
+   The transport bar stays on top; the screen underneath is inert and the page does not scroll. */
+html.ws-lock { overflow: hidden; } /* only the root: an overflow on body would make it a scroll box and unstick the transport bar */
+body.ws-open .topbar { z-index: 47; }
+.ws { position: fixed; inset: 0; z-index: 46; padding-top: var(--ws-top, 0px); background: var(--bg); display: flex; flex-direction: column; animation: ws-in .22s cubic-bezier(.2, .8, .3, 1); }
+.ws:focus { outline: none; }
+.ws.ws-swap { animation: none; }
+@keyframes ws-in { from { opacity: 0; transform: translateY(22px); } }
+.ws-inner { width: 100%; max-width: 1320px; margin: 0 auto; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px;
+  padding: 10px max(14px, env(safe-area-inset-right, 0px)) calc(14px + env(safe-area-inset-bottom, 0px)) max(14px, env(safe-area-inset-left, 0px)); }
+.ws-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; flex: none; }
+.ws-close { flex: none; padding: 0 14px 0 10px; }
+.ws-title { margin: 0; min-width: 0; display: inline-flex; align-items: center; gap: 9px; font-family: var(--font-display); font-weight: 800; font-size: 22px; letter-spacing: -0.025em; line-height: 1.1; white-space: nowrap; }
+.ws-title .sw { width: 11px; height: 11px; border-radius: 3.5px; }
+.ws-title-text { overflow: hidden; text-overflow: ellipsis; }
+.ws-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 10px; }
+.ws-body > * { flex: none; min-width: 0; }
+.scene-sel select { max-width: 200px; }
+
+/* the cards on a screen that open a workspace */
+.ws-card { gap: 10px; align-content: stretch; }
+.ws-card .panel-head h3 { display: inline-flex; align-items: center; gap: 8px; }
+.ws-card-preview { position: relative; display: block; width: 100%; min-width: 0; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; background: var(--well); color: var(--ink); text-align: left; overflow: hidden; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.ws-card-preview:hover { border-color: color-mix(in oklab, var(--c, var(--ink)) 60%, var(--line)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--c, var(--ink)) 16%, transparent); }
+.ws-card-preview > * { pointer-events: none; }
+.ws-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
+.ws-card-foot .lbl { white-space: nowrap; }
+.ws-go { padding: 0 16px 0 12px; }
+.ws-go.colored .ico { color: inherit; }
+
+/* a track's volume / tone / space / echo dials (UI.trackKnobs) */
+.track-knobs { display: flex; flex-wrap: wrap; gap: 2px 4px; min-width: 0; }
+.track-knobs .knob { min-width: 62px; }
+.track-knobs .knob .dial { width: 44px; height: 44px; }
 
 /* ================= controls ================= */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 36px; padding: 0 13px; border-radius: 10px; border: 1px solid var(--line); background: var(--raise); font-size: 14px; font-weight: 600; white-space: nowrap; position: relative; color: var(--ink); }
@@ -357,6 +393,27 @@ button.list-item:hover { background: var(--well); }
   .sheet.wide { width: 100%; }
   .tour-card { left: 10px; right: 10px; top: auto; bottom: calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px)); transform: none; width: auto; }
   #hud { display: none; }
+  /* workspaces cover the bottom tabs, so toasts and tour cards can sit lower */
+  body.ws-open #toasts { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+  body.ws-open .tour-card { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+  /* during a tour, leave room under a workspace's content so the card never hides the spotlight */
+  body.touring .ws-body { padding-bottom: 46vh; }
+  .ws-inner { padding: 8px max(10px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px)); gap: 8px; }
+  .ws-head { gap: 8px; }
+  .ws-close { padding: 0 12px 0 9px; }
+  .ws-tight .ws-close { width: 40px; padding: 0; }
+  .ws-tight .ws-close .btn-label { display: none; }
+  .ws-tight .ws-title { display: none; } /* crowded headers: the track or scene pickers say where you are */
+  .ws-title { font-size: 19px; }
+  .scene-sel select { max-width: 150px; }
+  /* a play card can sit its button beside the preview to save a row */
+  .ws-card.ws-card-side { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .ws-card-side > .panel-head { grid-column: 1 / -1; }
+  .ws-card-side > .ws-card-foot { grid-column: 2; grid-row: 2; }
+  .ws-card-side > .ws-card-foot > :not(.btn) { display: none; }
+  .ws-card-side > .ws-card-foot .ws-go { flex-direction: column; height: auto; min-height: 64px; padding: 8px 12px; gap: 4px; white-space: normal; text-align: center; line-height: 1.15; }
+  .track-knobs { justify-content: space-between; }
+  .track-knobs .knob { min-width: 0; flex: 1 1 0; }
 }
 @media (max-width: 370px) {
   .topbar .brand { display: none; }

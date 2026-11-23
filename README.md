@@ -17,11 +17,15 @@ The first time you open it, a demo song loads and a short welcome tour is offere
 | Screen | What it's for |
 |---|---|
 | **Loops** | The home base. A grid of loops: 5 tracks across, 8 scenes down. Tap a loop to start or stop it; changes wait for the next bar so you stay in time. Tap **+** to add a ready-made loop. |
-| **Beat** | Drum machine. Click squares to place hits, pick a kit, add swing, or tap the pads and your number pad. |
-| **Keys** | A piano you can play with your computer keyboard, and a note editor to draw melodies and bass lines. "Only notes in key" hides notes that would sound off. |
-| **Chords** | Eight chord pads that are always in your key, so nothing sounds wrong. Build a chord progression and play a scale-locked melody strip. |
+| **Beat** | Drum machine. Pick a kit, add swing and shape the drum sound. **Edit beat** opens the step grid full screen to place hits; **Play pads** opens big finger-drumming pads (your number pad works too). |
+| **Keys** | Pick a track, its instrument and sound. **Edit notes** opens a full-screen note editor to draw melodies and bass lines ("Only notes in key" hides notes that would sound off); **Play piano** opens a big piano you can also play with your computer keyboard. |
+| **Chords** | Pick the chord sound and flavor. **Edit chords** opens the progression full screen, with the pads to fill each box and the rhythm; **Play chords** opens eight always-in-key pads and a scale-locked melody strip. |
 | **Mixer** | Volume, left/right, tone, reverb ("Space") and echo for each track, plus master character: drive, pump and lo-fi. One-tap presets. |
 | **Song** | Put your scenes in order (intro, verse, chorus…), play the whole song, and export it as a WAV file. |
+
+On Beat, Keys and Chords, the screen itself holds the sound controls and two cards with a live preview. Each card opens its
+own full-screen area, so on a phone you never scroll through one long page. **Close** (or `Esc`, or your phone's Back
+button) takes you back; the music keeps playing.
 
 Every screen has a **Tutorial** button. Hover over any dial or button to see what it does; on a phone, press and hold.
 
@@ -36,6 +40,7 @@ Every screen has a **Tutorial** button. Hover over any dial or button to see wha
 | `←` `→` | Change the picked control (hold Shift to move faster) |
 | `↑` `↓` | Pick the previous / next control |
 | `Enter` | Press the picked button |
+| `Esc` | Let go of the picked control, then close a full-screen editor or pads area, then stop playback |
 | `[` `]` | Previous / next screen |
 | `A W S E D F T G Y H U J K` | Play the piano on the Keys screen. There, hold Shift with a letter to pick controls. |
 | `Ctrl/⌘ Z`, `Ctrl/⌘ Shift Z` | Undo / redo |
