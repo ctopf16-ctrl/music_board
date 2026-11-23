@@ -1,7 +1,9 @@
 /* Beat Board · Chords screen
-   Layout: header, the sound panel and two cards. The cards open workspaces (full-screen areas):
-   the progression editor (lane and pads on the left, rhythm on the right; a Chords | Rhythm switch below
-   1100px) and the play area (pads above the melody strip). Every color is a token. */
+   Computers: header, then a grid of panels: chord pads across the top, the progression below them, then the
+   rhythm section and the melody strip side by side (narrower: everything stacks).
+   Phones (≤ 720px): the sound panel and two cards. The cards open workspaces (full-screen areas): the
+   progression editor (a Chords | Rhythm switch) and the play area (pads above the melody strip).
+   Every color is a token. */
 .cp-view { --box-h: 70px; }
 
 /* ---------- header ---------- */
@@ -11,9 +13,22 @@
 .cp-scenes > .scenes { min-width: 0; flex: 1 1 auto; }
 .cp-scenes > .hk { top: -6px; right: -6px; }
 
-/* ---------- sound panel and cards ---------- */
+/* ---------- computers: the grid of panels ---------- */
+.cp-grid { display: grid; gap: 12px; min-width: 0; grid-template-columns: minmax(0, 1fr); grid-template-areas: "pads" "lane" "rhythm" "mel"; }
+.cp-grid > .cp-pads-panel { grid-area: pads; }
+.cp-grid > .cp-lane-panel { grid-area: lane; }
+.cp-grid > .cp-rhythm-panel { grid-area: rhythm; }
+.cp-grid > .cp-mel-panel { grid-area: mel; }
+.cp-mel-panel { grid-template-rows: auto 1fr; }
+@media (min-width: 1100px) {
+  .cp-grid { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); grid-template-areas: "pads pads" "lane lane" "rhythm mel"; }
+}
+.cp-ctls-toggle, .cp-tools-toggle { display: none; }
+.cp-ctls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 18px; min-width: 0; }
+
+/* ---------- phones: sound panel and cards ---------- */
 .cp-sound-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 26px; min-width: 0; }
-.cp-ctl-sound .sel select { min-width: 180px; }
+.cp-sound .cp-ctl-sound .sel select { min-width: 180px; }
 .cp-cards { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
 .cp-mini-wrap { display: grid; gap: 8px; padding: 12px; }
 .cp-mini { position: relative; height: 74px; border-radius: 8px; background: var(--raise);
@@ -43,20 +58,10 @@
 .cp-card-hint { font-size: 12.5px; }
 .cp-prog-card .ws-card-foot .sel select { min-width: 200px; }
 
-/* ---------- workspaces ---------- */
+/* ---------- phones: workspaces ---------- */
 .cp-ed { display: grid; gap: 12px; min-width: 0; grid-template-columns: minmax(0, 1fr); align-items: start; }
-@media (min-width: 1100px) {
-  .cp-ed { grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); grid-template-areas: "lane rhythm" "pads rhythm" "follow rhythm"; }
-  .cp-ed .cp-lane-panel { grid-area: lane; }
-  .cp-ed .cp-ed-pads { grid-area: pads; }
-  .cp-ed .cp-follow { grid-area: follow; }
-  .cp-ed .cp-rhythm-panel { grid-area: rhythm; }
-  .cp-ed .cp-presets { grid-template-columns: repeat(5, minmax(0, 1fr)); }
-  .cp-tabs { display: none; }
-}
-@media (max-width: 1099px) {
-  .cp-ed[data-tab="chords"] .cp-rhythm-panel, .cp-ed[data-tab="rhythm"] .cp-lane-panel, .cp-ed[data-tab="rhythm"] .cp-ed-pads, .cp-ed[data-tab="rhythm"] .cp-follow { display: none; }
-}
+.cp-ed[data-tab="chords"] .cp-rhythm-panel, .cp-ed[data-tab="rhythm"] .cp-lane-panel, .cp-ed[data-tab="rhythm"] .cp-ed-pads, .cp-ed[data-tab="rhythm"] .cp-follow-panel { display: none; }
+.cp-follow-panel .cp-follow { padding-top: 0; border-top: 0; }
 .cp-tabs button { min-width: 74px; justify-content: center; }
 .cp-padslot { min-width: 0; }
 .cp-edpad-hint { font-size: 12.5px; }
@@ -188,7 +193,7 @@
 .cp-grid-hint { margin-top: -4px; }
 
 /* follow these chords */
-.cp-follow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; min-width: 0; }
+.cp-follow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 10px; border-top: 1px dashed var(--line); min-width: 0; }
 .cp-follow-item { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
 .cp-follow-name { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
 .cp-follow-name::before { content: ""; width: 9px; height: 9px; border-radius: 3px; background: var(--c); }
@@ -228,7 +233,7 @@
 /* ---------- melody strip ---------- */
 .cp-mel {
   display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: center;
-  height: 100%; min-height: 150px; min-width: 0;
+  height: 100%; min-height: 176px; min-width: 0;
   touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
 }
 .cp-mbar {

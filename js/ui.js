@@ -390,10 +390,18 @@ UI.glide = function (container, selector, on, off) {
   ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => container.addEventListener(ev, end));
 };
 
-/* ================= workspaces =================
+/* ================= phone layout =================
+   Phones (≤ 720px) split Beat, Keys and Chords into a short screen plus full-screen workspaces; computers keep
+   everything on one page. A view builds both arrangements once and moves the same control elements between them.
+   UI.onLayout(fn) calls fn(isPhone) now and whenever the screen crosses 720px. */
+UI.phone = window.matchMedia('(max-width: 720px)');
+UI.onLayout = fn => { fn(UI.phone.matches); UI.phone.addEventListener('change', () => fn(UI.phone.matches)); };
+
+/* ================= workspaces (phones only) =================
    A full-screen area that opens over a screen: the step grid, the piano roll, the pads. The transport bar stays
    on top so Play, Record and Undo still work; the screen underneath goes inert until the workspace closes
    (Close button, Esc, or the phone's Back). Append ws.el to the view's <section>, next to the main content.
+   On a computer open() does nothing: the same content sits on the page itself.
    o: {id, title, color, head: [elements after the title], cls, label, closeTip, onOpen(), onClose()}
    returns {id, el, head, body, open({from}), close(), isOpen(), setColor(c)} */
 const WS = UI.workspaces = {};
@@ -417,7 +425,7 @@ UI.workspace = function (o) {
   if (o.color) w.setColor(o.color);
   w.isOpen = () => UI.ws === w;
   w.open = (opts = {}) => {
-    if (UI.ws === w) return;
+    if (UI.ws === w || !UI.phone.matches) return;
     const swap = !!UI.ws;
     if (UI.ws) UI.ws.close({ keepHistory: true, swap: true });
     w.from = opts.from || (document.activeElement !== document.body ? document.activeElement : null);
@@ -478,6 +486,8 @@ window.addEventListener('popstate', () => {
   BB.emit('popstate');
 });
 window.addEventListener('resize', () => { if (UI.ws) wsMeasure(); });
+/* registered before any view's layout listener, so a workspace is closed before its content moves back */
+UI.phone.addEventListener('change', () => { if (!UI.phone.matches && UI.ws) UI.ws.close(); });
 
 /* ================= toast ================= */
 UI.toast = function (text, opts = {}) {
@@ -567,7 +577,9 @@ Tour.register = (id, def) => { Tour.tours[id] = def; };
 Tour.start = function (id, i = 0) {
   const def = Tour.tours[id]; if (!def) return;
   Tour.stop();
-  Tour.active = { id, def, i };
+  /* a step with only: 'phone' | 'desk' belongs to that layout (phones split screens into workspaces) */
+  const steps = def.steps.filter(st => !st.only || st.only === (UI.phone.matches ? 'phone' : 'desk'));
+  Tour.active = { id, def: Object.assign({}, def, { steps }), i };
   const shade = h('div', 'tour-spot');
   const card = h('div', { class: 'tour-card', role: 'dialog', 'aria-live': 'polite', 'aria-label': def.title });
   Tour.active.shade = shade; Tour.active.card = card;

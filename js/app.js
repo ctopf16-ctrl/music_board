@@ -310,7 +310,7 @@ function openHelp() {
         sc(['←', '→'], 'Change the picked control. Hold Shift to move faster.'),
         sc(['↑', '↓'], 'Pick the previous / next control'),
         sc(['Enter'], 'Press the picked button'),
-        sc(['Esc'], 'Let go of the picked control. Press again to close a step grid, note editor or pads area, then again to stop playback.'),
+        sc(['Esc'], 'Let go of the picked control (press again to stop playback)'),
         sc(['[', ']'], 'Previous / next screen'),
         sc(['Ctrl Z', 'Ctrl ⇧ Z'], 'Undo / redo'),
         sc(['Ctrl S'], 'Save in this browser'),

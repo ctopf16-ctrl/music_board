@@ -390,7 +390,8 @@ function refreshTools() {
   }
   T.swap.dataset.tipTitle = swapLabel;
   T.swap.dataset.tip = clip ? 'Replace this loop with a different ready-made one. Try a few until it feels right.' : `Pick a ready-made ${tr.name} loop for this square, or start a blank one.`;
-  T.edit.dataset.tip = `Opens this loop full screen in the ${editorOf(tr.id)} screen’s editor so you can change ${whatOf(tr.type)}. Close it to land on that screen.`;
+  T.edit.dataset.tip = UI.phone.matches ? `Opens this loop full screen in the ${editorOf(tr.id)} screen’s editor so you can change ${whatOf(tr.type)}. Close it to land on that screen.`
+    : `Opens this loop in the ${editorOf(tr.id)} screen so you can change ${whatOf(tr.type)}.`;
   T.paste.classList.toggle('is-off', !clipboard);
   T.paste.setAttribute('aria-disabled', String(!clipboard));
   T.len.update(); T.lenSel.update();
@@ -507,7 +508,7 @@ function toggleMix(id, key) {
   BB.store.change((v ? '' : 'Un') + (key === 'mute' ? 'mute ' : 'solo ') + name, p => { p.tracks[id][key] = v; }, { info: { track: id } });
 }
 
-/* Edit a loop: go to its screen and open the editor there straight away (step grid, progression or note editor) */
+/* Edit a loop: go to its screen. On phones, also open its editor straight away (step grid, progression or note editor). */
 function goEdit(t, s) {
   const id = TRACKS[t].id;
   if (BB.state.scene !== s) BB.setState({ scene: s });

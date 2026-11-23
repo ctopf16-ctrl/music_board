@@ -1,8 +1,10 @@
 /* Beat Board · Beat screen
    A drum machine (step grid) plus finger-drumming pads laid out like a computer number pad.
    It edits the drums clip of the scene being edited (BB.state.scene).
-   Layout: the screen itself holds the sound (kit, swing, volume and effects) and two cards. Each card opens a
-   full-screen workspace: the step grid (placing hits in time) and the pads (playing live). */
+   Computers: one page, as always: controls strip, then the step grid with the pads beside it.
+   Phones: the screen holds the sound (kit, swing, volume and effects) and two cards. Each card opens a
+   full-screen workspace: the step grid (placing hits in time) and the pads (playing live).
+   Both arrangements are built once; layout() moves the shared controls between them. */
 (function () {
 'use strict';
 const BB = window.BB, { h } = BB, UI = BB.ui, TR = BB.transport;
@@ -43,7 +45,7 @@ const kitNow = () => { const c = clip(); return (c && c.kit) || 'lofi'; };
 const isEmpty = c => BB.clipIsEmpty('drums', c);
 const touchy = () => !BB.finePointer();
 const paging = () => narrowMQ.matches && V.page !== 'all';
-const gridOpen = () => !!(V.ws.grid && V.ws.grid.isOpen());
+const gridOpen = () => !UI.phone.matches || !!(V.ws.grid && V.ws.grid.isOpen()); // the step grid is on screen
 const pageOf = s => (s < 8 ? 'a' : 'b');
 const velAt = (c, v, i) => (c && c.steps[v] && c.steps[v][i]) || 0;
 const rollAt = (c, v, i) => (c && c.rolls && c.rolls[v] && c.rolls[v][i]) || 0;
@@ -391,11 +393,12 @@ function buildSound() {
     set: v => BB.store.change('Swing', p => { p.swing = v; }, { group: 'knob-swing' }) });
   C.swing.classList.add('beat-swing');
   C.knobs = UI.trackKnobs('drums', { volKey: 'O' });
-  return h('section', { class: 'panel beat-sound c-drums', id: 'beat-sound', 'aria-label': 'Drum sound' },
-    h('div', 'panel-head', h('h3', null, h('i', 'sw'), 'Sound'), h('p', 'hint', 'Change these while the music plays to hear the difference.')),
-    h('div', 'beat-sound-row',
-      group('Kit', C.kit, 'beat-cg-kit'),
-      h('div', 'beat-dials', C.swing, h('span', { class: 'beat-dials-sep', 'aria-hidden': 'true' }), C.knobs)));
+  V.gKit = group('Kit', C.kit, 'beat-cg-kit');
+  V.dialSep = h('span', { class: 'beat-dials-sep', 'aria-hidden': 'true' });
+  V.dials = h('div', 'beat-dials', C.swing, V.dialSep, C.knobs);
+  V.soundRow = h('div', 'beat-sound-row', V.gKit, V.dials);
+  return h('section', { class: 'panel beat-sound c-drums phone-layout', id: 'beat-sound', 'aria-label': 'Drum sound' },
+    h('div', 'panel-head', h('h3', null, h('i', 'sw'), 'Sound')), V.soundRow);
 }
 /* Card: a live mini picture of the beat, starter beats, and the button that opens the step grid */
 function buildGridCard() {
@@ -416,15 +419,14 @@ function buildGridCard() {
   V.miniBar = h('span', 'pill beat-mini-bar', '');
   C.starter = UI.select({ label: 'Starter beats', key: 'P', small: true,
     tip: 'Ready-made beats in many styles. Picking one replaces this scene’s beat; then change it to make it yours. Press P, then ← → to flip through them.',
-    options: () => [{ id: '', label: 'Starter beats…' }].concat(BB.library.itemsFor('drums').map(it => ({ id: it.id, label: it.name, group: it.group }))),
+    options: () => [{ id: '', label: UI.phone.matches ? 'Starter beats…' : 'Pick a style…' }].concat(BB.library.itemsFor('drums').map(it => ({ id: it.id, label: it.name, group: it.group }))),
     value: () => V.starterShown, set: applyStarter });
-  C.starter.classList.add('beat-cg-starter');
   C.surprise = UI.button({ label: 'Surprise me', key: 'U', icon: UI.ICONS.dice, cls: 'sm', instant: true,
     tip: 'Makes a random beat to spark ideas, using your kit. Press again for another one. Undo brings your old beat back.', onClick: surprise });
   C.openGrid = UI.button({ label: 'Edit beat', key: 'G', icon: UI.ICONS.edit, cls: 'colored ws-go',
     tip: 'Open the step grid full screen to place each hit in time. Close it (or press Esc) to come back here.', onClick: () => V.ws.grid.open({ from: C.openGrid }) });
   V.cardName = h('span', 'pill beat-name c-drums');
-  return UI.wsCard({ id: 'beat-grid-card', title: 'Step grid', color: 'drums', cls: 'beat-card-grid', pill: V.cardName, headExtra: V.miniBar,
+  return UI.wsCard({ id: 'beat-grid-card', title: 'Step grid', color: 'drums', cls: 'beat-card-grid phone-layout', pill: V.cardName, headExtra: V.miniBar,
     preview: h('div', 'beat-mini-wrap', mini, V.miniEmpty), onOpen: () => V.ws.grid.open({ from: C.openGrid }),
     ariaLabel: 'Open the step grid', tipTitle: 'Your beat', tip: 'A picture of the beat in this scene: each row is a drum, each column a step in time. Tap it to open the step grid and edit it.',
     foot: [C.starter, C.surprise], button: C.openGrid });
@@ -435,10 +437,54 @@ function buildPadsCard() {
   mp.append(h('i', 'bmp rec', h('b', null, '.'), h('span', null, 'Rec')));
   V.ctl.openPads = UI.button({ label: 'Play pads', key: 'A', icon: UI.ICONS.tap, cls: 'colored ws-go',
     tip: 'Open big drum pads full screen to play live with your fingers. Turn on Record to add what you play to the beat.', onClick: () => V.ws.pads.open({ from: V.ctl.openPads }) });
-  return UI.wsCard({ id: 'beat-pads-card', title: 'Pads', color: 'drums', cls: 'beat-card-pads ws-card-side',
+  return UI.wsCard({ id: 'beat-pads-card', title: 'Pads', color: 'drums', cls: 'beat-card-pads ws-card-side phone-layout',
     preview: mp, onOpen: () => V.ws.pads.open({ from: V.ctl.openPads }),
     ariaLabel: 'Open the drum pads', tipTitle: 'Finger drums', tip: 'Big pads to play the drums live, like a drum machine. Tap here to open them.',
     foot: [h('p', 'hint beat-card-hint', h('span', 'only-fine', 'The number pad plays them from any screen.'), h('span', 'only-touch', 'Freestyle, or record a take.'))], button: V.ctl.openPads });
+}
+
+/* Computers: the classic one-page arrangement. Its containers start empty; layout() fills them. */
+function buildDesk() {
+  V.gStarter = group('Starter beats', null, 'beat-cg-starter');
+  V.swingWrap = h('div', 'beat-cg beat-cg-swing');
+  V.deskActions = h('div', 'beat-actions');
+  V.deskControls = h('div', { class: 'panel beat-controls desk-layout', id: 'beat-controls' });
+  V.deskPadSlot = h('div', 'beat-padslot');
+  V.deskPads = h('section', { class: 'panel beat-padpanel c-drums', 'aria-label': 'Drum pads' },
+    h('div', 'panel-head', h('h3', null, 'Pads'), h('p', 'hint', h('span', 'only-fine', 'Number pad layout'), h('span', 'only-touch', 'Tap to play'))),
+    V.deskPadSlot,
+    h('p', { class: 'hint beat-padhint' },
+      h('span', 'only-fine', 'Tap the number pad to play. Turn on Record (R) to add what you tap to the beat.'),
+      h('span', 'only-touch', 'Tap the pads to play. Turn on Record to add what you tap to the beat.')));
+  V.deskMain = h('div', 'beat-main desk-layout', V.deskPads);
+}
+/* Put the shared controls where this screen size wants them */
+function layout(phone) {
+  const C = V.ctl, foot = V.gridCardFoot;
+  const softTip = 'Quiet hits, shown dimmer. Drummers call them ghost notes; they make a beat feel human.';
+  if (phone) {
+    V.soundRow.replaceChildren(V.gKit, V.dials);
+    V.dials.replaceChildren(C.swing, V.dialSep, C.knobs);
+    foot.prepend(C.starter, C.surprise);
+    V.tools.replaceChildren(V.gTool, V.gLen);
+    V.phoneActions.replaceChildren(C.copy, C.clear);
+    V.seqHead.append(V.phoneActions);
+    V.ws.grid.head.insertBefore(V.nameEl, V.wsGrow);
+    V.ws.grid.body.append(V.tools, V.seqPanel);
+    V.ws.pads.body.prepend(V.padsWrap);
+  } else {
+    V.gStarter.append(C.starter);
+    V.swingWrap.append(C.swing);
+    V.deskActions.replaceChildren(C.surprise, C.copy, C.clear);
+    V.deskControls.replaceChildren(V.gKit, V.gLen, V.gTool, V.gStarter, V.swingWrap, V.deskActions);
+    V.seqHead.insertBefore(V.nameEl, V.seqHead.children[1]);
+    V.deskMain.prepend(V.seqPanel);
+    V.deskPadSlot.append(V.padsWrap);
+  }
+  C.swing.classList.toggle('sm', !phone); C.swing.classList.toggle('md', phone);
+  C.starter.classList.toggle('sm', phone); C.starter.refill();
+  const softBtn = C.tool.querySelectorAll('button')[1];
+  if (softBtn) softBtn.setAttribute('data-tip', phone ? softTip : softTip + ' The pads play softly too.');
 }
 
 /* Workspace: the step grid */
@@ -464,8 +510,9 @@ function buildGridWorkspace() {
     tip: 'Copies the bar you are looking at into every other bar of this beat. Handy before you add a fill to the last bar.', onClick: copyBarToAll });
   C.clear = UI.button({ label: 'Clear', key: 'X', icon: UI.ICONS.trash, cls: 'sm ghost danger icon-phone',
     tip: 'Removes every hit from this beat. You can undo it.', onClick: clearBeat });
-  const tools = h('div', { class: 'beat-controls', id: 'beat-controls' },
-    group('Hits', C.tool, 'beat-cg-tool'), group([h('span', 'w720', 'Length'), h('span', 'n720', 'Bars')], C.len, 'beat-cg-len'));
+  V.gTool = group('Hits', C.tool, 'beat-cg-tool');
+  V.gLen = group([h('span', 'w720', 'Length'), h('span', 'n720', 'Bars')], C.len, 'beat-cg-len');
+  V.tools = h('div', 'beat-tools', V.gTool, V.gLen);
 
   C.follow = UI.toggle({ label: 'Follow', key: 'F', icon: ICON.follow, cls: 'sm c-drums',
     tip: 'When on, the grid jumps to the part that is playing. Picking a bar yourself turns it off.',
@@ -477,22 +524,26 @@ function buildGridWorkspace() {
   V.barsWrap = h('div', 'beat-bars', h('span', 'lbl', 'Bar'));
   V.followWrap = h('div', 'beat-follow', C.follow);
   V.nameEl = h('span', { class: 'pill beat-name c-drums', 'data-tip': 'The name and length of the beat in this scene.', 'data-tip-title': 'This beat' });
-  const head = h('div', 'panel-head',
+  V.phoneActions = h('div', 'beat-actions', C.copy, C.clear);
+  V.seqHead = h('div', 'panel-head',
+    h('h3', 'desk-layout', 'Step grid'),
     h('p', 'hint beat-grid-hint', h('span', 'only-fine', 'Click to add a hit, drag to paint, right-click to erase.'), h('span', 'only-touch', 'Tap to add a hit. Slide sideways to paint.')),
-    h('span', 'grow'), h('div', 'beat-pages', C.pages), V.barsWrap, V.followWrap, h('div', 'beat-actions', C.copy, C.clear));
-  const panel = h('section', { class: 'panel beat-seq c-drums', 'aria-label': 'Step grid' }, head, buildGrid());
+    h('span', 'grow'), h('div', 'beat-pages', C.pages), V.barsWrap, V.followWrap, V.phoneActions);
+  V.seqPanel = h('section', { class: 'panel beat-seq c-drums', 'aria-label': 'Step grid' }, V.seqHead, buildGrid());
+  V.wsGrow = h('span', 'grow');
 
   V.ws.grid = UI.workspace({ id: 'beat-grid', title: 'Step grid', color: 'drums', cls: 'beat-ws beat-gridws',
     closeTip: 'Close the step grid and go back to the Beat screen. Your beat keeps playing. Shortcut: Esc.',
-    head: [V.nameEl, h('span', 'grow'), UI.sceneSelect({ track: 'drums', key: 'S' })],
+    head: [V.nameEl, V.wsGrow, UI.sceneSelect({ track: 'drums', key: 'S' })],
     onOpen: () => refresh(), onClose: () => { V.cursor.on = false; paintCursor(); } });
-  V.ws.grid.body.append(tools, panel);
+  V.ws.grid.body.append(V.tools, V.seqPanel);
   return V.ws.grid.el;
 }
 /* Workspace: big pads for playing live */
 function buildPadsWorkspace() {
-  const wrap = h('div', { class: 'beat-pads c-drums', id: 'beat-pads', 'data-no-press-tip': '' });
-  const vel = () => (V.padSoft ? 0.5 : 0.95);
+  const wrap = V.padsWrap = h('div', { class: 'beat-pads c-drums', id: 'beat-pads', 'data-no-press-tip': '' });
+  /* phones have a Hard / Soft switch on the pads; computers follow the Hits tool, as they always did */
+  const vel = () => ((UI.phone.matches ? V.padSoft : V.tool === 'soft') ? 0.5 : 0.95);
   for (const id of PAD_ORDER) {
     const v = BB.DRUM[id];
     const pad = h('button', { class: 'beat-pad' + (id === 'shaker' ? ' wide' : ''), 'data-voice': id, 'aria-label': v.name + ' pad (number ' + v.pad + ')',
@@ -569,12 +620,15 @@ BB.views.register({
       h('div', 'view-head beat-head',
         h('div', 'beat-titles',
           h('div', 'beat-title-row', h('h2', 'view-title', 'Beat'), UI.tourButton('beat')),
-          h('p', 'view-sub', 'Shape the drum sound here. Open the step grid to place hits, or the pads to play live.')),
+          h('p', 'view-sub', h('span', 'only-fine', 'Click'), h('span', 'only-touch', 'Tap'), ' squares to build a drum pattern, or play the pads like a drummer.')),
         UI.scenePicker({ track: 'drums', key: 'S' })),
-      buildSound(),
-      h('div', 'beat-cards', buildGridCard(), buildPadsCard()),
-      buildGridWorkspace(),
-      buildPadsWorkspace());
+      buildSound());
+    buildDesk();
+    const gridCard = buildGridCard();
+    V.gridCardFoot = gridCard.querySelector('.ws-card-foot');
+    el.append(V.deskControls, h('div', 'beat-cards phone-layout', gridCard, buildPadsCard()), V.deskMain,
+      buildGridWorkspace(), buildPadsWorkspace());
+    UI.onLayout(phone => { layout(phone); if (V.grid) refresh(); });
     BB.on('drumhit', d => { if (BB.state.view === 'beat') flash(d.voice, 'hit'); });
     BB.on('ui', d => { if ('scene' in d) { V.visibleBar = 0; V.starterShown = ''; V.playBar = -1; refresh(); } });
     BB.on('transport', d => { if ('rec' in d && V.recPad) V.recPad.setAttribute('aria-pressed', TR.rec ? 'true' : 'false'); if (d.playing === false) { V.playBar = -1; paintPlayhead(); } });
@@ -616,21 +670,39 @@ BB.views.register({
     }
   },
   tutorial: [
-    { target: '#beat-sound', view: 'beat', title: 'Your drum sound',
-      text: 'This screen is home base for your drums. Here you shape the <b>sound</b>: the <b>Kit</b> swaps every drum at once, <b>Swing</b> makes the groove bounce, and the dials set the drums’ volume, tone, reverb (Space) and echo.' },
-    { target: '#beat-grid-card', view: 'beat', title: 'Your beat at a glance',
-      text: 'This little picture is the beat in the scene you picked at the top. <b>Tap it</b> (or <b>Edit beat</b>) to open the step grid full screen. <b>Play pads</b> opens big pads for playing live.' },
-    { target: '#beat-grid', view: 'beat', title: 'The step grid',
-      text: 'Each row is one drum sound and each square is a short slice of time. Every group of 4 squares is one <b>beat</b>, and <b>16 squares make 1 bar</b>. Press Play and count “1, 2, 3, 4”. <b>Close</b> (or Esc) takes you back.' },
-    { target: '#beat-grid .beat-row[data-voice="kick"]', view: 'beat', title: 'Kick on 1 and 3, snare on 2 and 4',
+    /* computers */
+    { only: 'desk', target: '#beat-grid', view: 'beat', title: 'The step grid',
+      text: 'This is a drum machine. Each row is one drum sound, and each square is a short slice of time. <b>16 squares make 1 bar.</b> When you press Play, the music moves left to right and loops.' },
+    { only: 'desk', target: '#beat-grid .beat-nums', view: 'beat', title: 'Count 1, 2, 3, 4',
+      text: 'Every group of 4 squares is one <b>beat</b>, and a bar has 4 beats. Count “1, 2, 3, 4” out loud while it plays and you will feel where each hit lands.' },
+    { only: 'desk', target: '#beat-grid .beat-row[data-voice="kick"]', view: 'beat', title: 'Kick on 1 and 3, snare on 2 and 4',
       text: 'The beat behind thousands of songs: a <b>Kick</b> on beats 1 and 3, a <b>Snare</b> on beats 2 and 4, and a <b>Hat</b> on every other square. Click a row name to hear that drum.' },
-    { target: '.beat-cg-tool', view: 'beat', title: 'Soft hits and rolls',
-      text: '<b>Soft</b> adds quiet “ghost” hits that make a beat feel human. <b>Rolls</b> turns a hit into a quick burst: click a hi-hat for the classic trap flutter.' },
-    { target: '#beat-pads', view: 'beat', title: 'Finger drums',
+    { only: 'desk', target: '#beat-pads', view: 'beat', title: 'Finger drums',
       text: 'Tap the pads to play live. They are laid out like a computer <b>number pad</b>: 1 is the kick, 2 the snare, 4 the hi-hat. The number pad plays drums from any screen, and the 1–0 keys work here too.' },
-    { target: '.beat-pad.rec', view: 'beat', title: 'Record what you tap',
+    { only: 'desk', target: '.beat-pad.rec', view: 'beat', title: 'Record what you tap',
       text: 'Turn on <b>Record</b> (press <b>R</b>, or the number pad’s <b>.</b> key), then tap along with the music. Your hits land on the grid, snapped in time. Not happy? Undo with <b>Ctrl+Z</b>.' },
-    { target: '.beat-cg-starter', view: 'beat', title: 'Try this',
+    { only: 'desk', target: '.beat-cg-kit', view: 'beat', title: 'Kits and starter beats',
+      text: 'The <b>Kit</b> swaps the sounds and keeps your pattern: try Trap 808 or 8-bit. <b>Starter beats</b> give you a ready-made groove in a style you like, to change as you wish.' },
+    { only: 'desk', target: '.beat-cg-swing', view: 'beat', title: 'Swing',
+      text: 'Swing pushes every other 16th note a little late, so the beat bounces instead of marching. Try around 30% with the Lo-fi starter beat. Press <b>W</b>, then <b>← →</b>.' },
+    { only: 'desk', target: '.beat-cg-tool', view: 'beat', title: 'Try this',
+      text: 'Pick the <b>Boom bap</b> starter beat and press Play. Choose <b>Soft</b> and add a quiet snare just before beat 3. Then choose <b>Rolls</b> and click a hi-hat to make it flutter.' },
+    /* phones: the step grid and the pads open full screen */
+    { only: 'phone', target: '#beat-sound', view: 'beat', title: 'Your drum sound',
+      text: 'This screen is home base for your drums. Here you shape the <b>sound</b>: the <b>Kit</b> swaps every drum at once, <b>Swing</b> makes the groove bounce, and the dials set the drums’ volume, tone, reverb (Space) and echo.' },
+    { only: 'phone', target: '#beat-grid-card', view: 'beat', title: 'Your beat at a glance',
+      text: 'This little picture is the beat in the scene you picked at the top. <b>Tap it</b> (or <b>Edit beat</b>) to open the step grid full screen. <b>Play pads</b> opens big pads for playing live.' },
+    { only: 'phone', target: '#beat-grid', view: 'beat', title: 'The step grid',
+      text: 'Each row is one drum sound and each square is a short slice of time. Every group of 4 squares is one <b>beat</b>, and <b>16 squares make 1 bar</b>. Press Play and count “1, 2, 3, 4”. <b>Close</b> (or Esc) takes you back.' },
+    { only: 'phone', target: '#beat-grid .beat-row[data-voice="kick"]', view: 'beat', title: 'Kick on 1 and 3, snare on 2 and 4',
+      text: 'The beat behind thousands of songs: a <b>Kick</b> on beats 1 and 3, a <b>Snare</b> on beats 2 and 4, and a <b>Hat</b> on every other square. Click a row name to hear that drum.' },
+    { only: 'phone', target: () => V.gTool, view: 'beat', title: 'Soft hits and rolls',
+      text: '<b>Soft</b> adds quiet “ghost” hits that make a beat feel human. <b>Rolls</b> turns a hit into a quick burst: click a hi-hat for the classic trap flutter.' },
+    { only: 'phone', target: '#beat-pads', view: 'beat', title: 'Finger drums',
+      text: 'Tap the pads to play live. They are laid out like a computer <b>number pad</b>: 1 is the kick, 2 the snare, 4 the hi-hat. The number pad plays drums from any screen, and the 1–0 keys work here too.' },
+    { only: 'phone', target: '.beat-pad.rec', view: 'beat', title: 'Record what you tap',
+      text: 'Turn on <b>Record</b> (press <b>R</b>, or the number pad’s <b>.</b> key), then tap along with the music. Your hits land on the grid, snapped in time. Not happy? Undo with <b>Ctrl+Z</b>.' },
+    { only: 'phone', target: () => V.ctl.starter, view: 'beat', title: 'Try this',
       text: 'Pick the <b>Boom bap</b> starter beat and press Play. Then tap <b>Edit beat</b>, choose <b>Soft</b> and add a quiet snare just before beat 3.' },
   ],
 });

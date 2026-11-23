@@ -37,13 +37,16 @@ js/app.js             boots everything: transport bar, tabs, global keys, menus,
 - Shared classes: `.view-head .view-title .view-sub`, `.panel .panel-head .hint`, `.empty`, `.pill`, `.row`,
   `.grow`, `.btn` (+ `.sm .ghost .primary .danger .icon-only .toggle .colored`), `.seg`, `.sel`,
   `.pkeys .pkey.white/.black/.lit` (piano look).
-- **Screens with an editor (Beat, Keys, Chords) are a hub plus workspaces.** The screen itself (the hub) holds only
-  the sound controls (instrument or kit, flavor, swing, `UI.trackKnobs`) and two cards (`UI.wsCard`), each with a live
-  preview. One card opens the editor workspace (where notes and timing are placed: step grid, piano roll, progression
-  and rhythm), the other opens the play workspace (pads, piano, chord pads and melody strip, for freestyling). A
-  workspace (`UI.workspace`) is a full-screen area over the screen; the transport bar stays on top. Keep each hub short
-  enough to fit a phone screen without scrolling, and put anything that edits the pattern inside the editor workspace.
-  See **Workspaces** below.
+- **On phones, screens with an editor (Beat, Keys, Chords) are a hub plus workspaces; computers keep one page.**
+  On a phone the screen itself (the hub) holds only the sound controls (instrument or kit, flavor, swing,
+  `UI.trackKnobs`) and two cards (`UI.wsCard`), each with a live preview. One card opens the editor workspace (where
+  notes and timing are placed: step grid, piano roll, progression and rhythm), the other opens the play workspace
+  (pads, piano, chord pads and melody strip, for freestyling). A workspace (`UI.workspace`) is a full-screen area over
+  the screen; the transport bar stays on top. Keep each hub short enough to fit a phone screen without scrolling.
+  On a computer (> 720px) the same screens are one page, exactly as before the phone layout existed: no hub cards, no
+  extra dials, no workspaces. A view builds both arrangements once and moves the same control elements between them in
+  a `layout(isPhone)` function registered with `UI.onLayout`. Put phone-only containers in `.phone-layout` and
+  computer-only ones in `.desk-layout` (each is hidden on the other with `!important`). See **Workspaces** below.
 - **Phones (≤ 720px).** The tabs become a fixed bottom bar, and `--nav-h` holds its height. The transport bar is one row
   (Play, Record, Tempo, Undo, ⌄, Menu); the ⌄ button (`app.showMore(open)`) opens the rest as a second row. Screen
   subtitles (`.view-sub`) are hidden, so keep each `.view-head` to the title and its buttons. `.phone-only` hides an element above 720px. Views stack
@@ -179,7 +182,7 @@ Every option bag accepts `tip` (tooltip text), `key` (keyboard letter) and `labe
 - `UI.ICONS.*`: inline SVG strings (play, stop, rec, plus, trash, copy, edit, dice, download, …)
 - `BB.h(tag, attrs, ...children)`: tiny element builder (`{class, html, text, style:{}, dataset:{}, onclick, 'data-tip': …}`)
 
-## Workspaces (`UI.workspace`)
+## Workspaces (`UI.workspace`, phones only)
 
 ```js
 const ws = UI.workspace({
@@ -191,6 +194,8 @@ ws.body.append(tools, grid);      // ws.body is a flex column that scrolls if it
 el.append(ws.el);                 // into the view's <section>, next to the hub content (not inside it)
 ws.open({ from: button }); ws.close(); ws.isOpen(); ws.setColor('melody');
 ```
+- `open()` does nothing on a computer, and crossing from phone to computer width closes an open workspace before the
+  views move their content back. Check `UI.phone.matches` for "is this the phone layout".
 - Opening makes everything else in the view's section `inert`, locks page scrolling (`html.ws-lock`), and pushes a
   history entry so the phone's Back button closes it. `Esc` closes it too (after a picked control and the view's own
   `Escape` handling). Switching screens closes it. `BB.ui.ws` is the open workspace; `BB.ui.workspaces[id]` finds one.
@@ -198,12 +203,13 @@ ws.open({ from: button }); ws.close(); ws.isOpen(); ws.setColor('melody');
   letter from the hub for the same kind of control (the scene picker keeps `S`). Letters must be unique among what is
   visible at once: the hub, or one workspace.
 - A view's `keydown` keeps playing notes, pads and drums whatever is open, but editing keys (grid cursor, nudging notes,
-  Delete) should only act while the editor workspace is open.
+  Delete) should only act while the editor is on screen: always on a computer, on a phone only while its workspace is open.
 - `UI.wsCard({title, color, pill, preview, onOpen, tip, foot: [...], button})` is the hub card: a live preview you can
   tap, a footer (starters), and the Open button (`cls: 'colored ws-go'`; pencil icon for editors, hand icon for play).
   Add `ws-card-side` to put the button beside the preview on phones.
 - Tutorials open the workspace their target lives in, or close it when the target is on the hub. Set `ws: 'id'` (or
-  `null`) on a step when the target moves between workspaces (the Chords pads do) or isn't built yet.
+  `null`) on a step when the target moves between workspaces (the Chords pads do) or isn't built yet. A step with
+  `only: 'phone'` or `only: 'desk'` is used in that layout only, so a view can keep separate phone and computer tours.
 
 ## Keyboard (the user cares about this a lot)
 
@@ -215,7 +221,7 @@ Global keys are handled in `app.js`:
   **↑ ↓** move to the previous/next control, and **Enter** presses it. `Esc` lets go.
 - **Reserved letters** (transport bar, global): **R** record, **T** tempo, **L** loop/song, **M** metronome, **K** key, **J** scale, **V** volume.
   Views may use any other letter. Letters must be unique within a view (or, with workspaces, within what is visible at once).
-- `[` and `]` switch screens. `?` opens help. `Esc` lets go of a picked control, then closes an open workspace, then stops playback. Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z redo, Ctrl/⌘+S save.
+- `[` and `]` switch screens. `?` opens help. `Esc` lets go of a picked control, then (phones) closes an open workspace, then stops playback. Ctrl/⌘+Z undo, Ctrl/⌘+Shift+Z redo, Ctrl/⌘+S save.
 - **Order for letters and digits:** `view.keydown(e)` runs first (return `true` if you used the key), then control
   letters, then the top-row digits 1–0 fall back to drums. With **Shift**, letters always go to controls first.
 - Views where letters play notes (Keys, Chords) set `letterMode: 'notes'`. Their badges then show ⇧, and controls
@@ -264,5 +270,6 @@ Use Playwright (`require('playwright')`, `chromium.launch()` needs no options). 
 3. Click and keyboard paths work. `localStorage.setItem('beatboard.welcomed','true')` skips the welcome dialog.
    Go to a screen with `location.hash = '#beat'` before load, or call `BB.app.setView('beat')`. Open a workspace with
    `BB.ui.workspaces['beat-grid'].open()` (ids: `beat-grid`, `beat-pads`, `keys-editor`, `keys-piano`, `chords-editor`,
-   `chords-play`) and check it too, including that the hub fits a 390×844 phone without scrolling.
+   `chords-play`) on a phone-sized page and check it too, including that the hub fits 390×844 without scrolling.
+   On a computer, Beat, Keys and Chords should look exactly as they did before the phone layout.
 4. Light and dark: `document.documentElement.setAttribute('data-theme','dark')`.

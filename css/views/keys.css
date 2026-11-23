@@ -1,5 +1,6 @@
-/* Beat Board · Keys screen: sound panel + two cards, and two workspaces (full-screen areas):
-   the piano roll and a playable piano.
+/* Beat Board · Keys screen: piano roll + playable piano.
+   Computers: one page (note editor panel, then piano panel). Phones (≤ 720px): a sound panel and two cards, and two
+   workspaces (full-screen areas): the piano roll and a playable piano.
    Everything is scoped to the Keys view. The root .kx and both workspaces carry the track color class
    (c-bass, c-melody, c-keys), so var(--c) / var(--c-ink) follow the track being edited. */
 .view[data-view="keys"] .kx { display: grid; gap: 12px; min-width: 0; }
@@ -132,6 +133,7 @@
 .view[data-view="keys"] .kx-empty b { color: var(--ink); font-size: 14.5px; }
 
 /* ---------- piano ---------- */
+.view[data-view="keys"] .kx-keys .kx-piano { height: 144px; display: grid; touch-action: none; user-select: none; -webkit-user-select: none; } /* computers: one row */
 .view[data-view="keys"] .kx-piano .pkey { cursor: pointer; }
 .view[data-view="keys"] .kx-piano .klet, .view[data-view="keys"] .kx-piano .kname { position: absolute; left: 0; right: 0; text-align: center; font-family: var(--font-mono); pointer-events: none; }
 .view[data-view="keys"] .kx-piano .klet { display: none; bottom: 26px; font-size: 11px; font-weight: 700; color: var(--key-w-ink); }
