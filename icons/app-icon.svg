@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180" width="180" height="180">
+  <!-- Beat Board home screen icon: the logo's four track pads on the dark panel.
+       Full-bleed and opaque: iOS rounds the corners itself. Render to apple-touch-icon.png (180x180). -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#262A32"/>
+      <stop offset="1" stop-color="#121419"/>
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.32"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="drop" x="-30%" y="-30%" width="160%" height="170%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <g id="pad">
+      <rect width="51" height="51" rx="13"/>
+    </g>
+  </defs>
+  <rect width="180" height="180" fill="url(#bg)"/>
+  <!-- well behind the pads -->
+  <rect x="26" y="26" width="128" height="128" rx="26" fill="#0E1013" opacity="0.55"/>
+  <g filter="url(#drop)">
+    <use href="#pad" x="34" y="34" fill="#FF7A52"/>
+    <use href="#pad" x="95" y="34" fill="#7A93FF"/>
+    <use href="#pad" x="34" y="95" fill="#FFC53D"/>
+    <use href="#pad" x="95" y="95" fill="#2BC9AE"/>
+  </g>
+  <g fill="url(#shine)">
+    <use href="#pad" x="34" y="34"/>
+    <use href="#pad" x="95" y="34"/>
+    <use href="#pad" x="34" y="95"/>
+    <use href="#pad" x="95" y="95"/>
+  </g>
+</svg>

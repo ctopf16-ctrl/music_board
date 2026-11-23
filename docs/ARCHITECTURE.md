@@ -7,6 +7,7 @@ It runs from GitHub Pages or straight from `index.html`.
 
 ```
 index.html            page shell, loads everything below in this order
+icons/                home screen icon: app-icon.svg is the source, apple-touch-icon.png (180x180) is rendered from it
 css/app.css           design tokens, app frame, shared components (read it before styling)
 css/views/<id>.css    one stylesheet per screen
 js/core.js            helpers, events, music theory, song model, store (undo/save), UI state, view registry
