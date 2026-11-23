@@ -37,7 +37,9 @@ js/app.js             boots everything: transport bar, tabs, global keys, menus,
 - Shared classes: `.view-head .view-title .view-sub`, `.panel .panel-head .hint`, `.empty`, `.pill`, `.row`,
   `.grow`, `.btn` (+ `.sm .ghost .primary .danger .icon-only .toggle .colored`), `.seg`, `.sel`,
   `.pkeys .pkey.white/.black/.lit` (piano look).
-- **Phones (≤ 720px).** The tabs become a fixed bottom bar, and `--nav-h` holds its height. Views stack
+- **Phones (≤ 720px).** The tabs become a fixed bottom bar, and `--nav-h` holds its height. The transport bar is one row
+  (Play, Record, Tempo, Undo, ⌄, Menu); the ⌄ button (`app.showMore(open)`) opens the rest as a second row. Screen
+  subtitles (`.view-sub`) are hidden, so keep each `.view-head` to the title and its buttons. `.phone-only` hides an element above 720px. Views stack
   into one column. Touch targets must be at least 40px. The page body must never scroll sideways: wide
   editors (piano roll, long patterns) scroll inside their own `overflow-x: auto` box. Hover tooltips
   become press-and-hold, and keyboard letters are hidden.

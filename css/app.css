@@ -101,6 +101,7 @@ body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-a
 .brand-name { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.03em; }
 .song-name { font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
 .tgroup { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+@media (min-width: 721px) { .phone-only { display: none !important; } }
 .tsep { width: 1px; align-self: stretch; background: var(--line); margin: 4px 2px; }
 .play-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 42px; min-width: 96px; padding: 0 16px 0 12px; border-radius: 12px; border: 0; background: var(--ink); color: var(--panel); font-weight: 700; position: relative; }
 .play-btn svg { width: 18px; height: 18px; }
@@ -315,28 +316,36 @@ button.list-item:hover { background: var(--well); }
 }
 /* ================= phones ================= */
 @media (max-width: 720px) {
-  :root { --nav-h: 62px; }
+  :root { --nav-h: 51px; }
   body { font-size: 15px; }
-  .app { padding-block: 6px calc(var(--nav-h) + 20px + env(safe-area-inset-bottom, 0px)); padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); gap: 8px; }
-  .topbar { padding: 6px 8px; gap: 6px 8px; border-radius: 14px; }
-  .brand-text, .tsep, .scope-wrap, .beats, .desk-only { display: none; }
-  .brand { padding: 4px; }
-  .play-btn { min-width: 0; width: 52px; height: 40px; padding: 0; }
+  .app { padding-block: 4px calc(var(--nav-h) + 12px + env(safe-area-inset-bottom, 0px)); padding-left: max(10px, env(safe-area-inset-left, 0px)); padding-right: max(10px, env(safe-area-inset-right, 0px)); gap: 8px; }
+  /* one-row transport bar: Play, Record, Tempo, Undo, More, Menu. The ⌄ button opens the rest as a second row. */
+  .topbar { padding: 4px 6px; gap: 6px 5px; border-radius: 14px; }
+  .brand, .tsep, .scope-wrap, .beats, .desk-only { display: none; }
+  .play-btn { min-width: 0; width: 48px; height: 40px; padding: 0; }
   .play-btn #playLabel { display: none; }
   .rec-btn { width: 40px; padding: 0; }
   .rec-btn .btn-label { display: none; }
-  .topbar .stepper { margin-left: auto; }
-  .topbar .more-row { order: 10; flex-basis: 100%; width: 100%; min-width: 0; overflow-x: auto; flex-wrap: nowrap; padding: 2px 2px 2px; scrollbar-width: none; }
-  .topbar .more-row::-webkit-scrollbar { display: none; }
+  .topbar .stepper-unit { display: none; }
+  .topbar #undoBtn { margin-left: auto; }
+  .topbar:not(.more-open) .more-row { display: none; }
+  .more-btn .ico { transition: transform .15s; }
+  .topbar.more-open .more-btn .ico { transform: rotate(180deg); }
+  .topbar .more-row { order: 10; flex-basis: 100%; width: 100%; min-width: 0; flex-wrap: wrap; padding: 2px 0; }
+  .topbar .metro { width: 40px; padding: 0; }
+  .topbar .metro .btn-label { display: none; }
+  .topbar .sel.sm select { max-width: 120px; }
   .topbar .more-row > * { flex: none; }
-  .tabs { position: fixed; z-index: 45; left: 0; right: 0; bottom: 0; gap: 0; padding: 4px max(4px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-right, 0px)); background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px -16px rgba(0,0,0,.4); }
-  .tab { flex-direction: column; justify-content: center; gap: 2px; border: 0; padding: 6px 2px; height: 54px; border-radius: 10px; text-align: center; }
+  .tabs { position: fixed; z-index: 45; left: 0; right: 0; bottom: 0; gap: 0; padding: 3px max(4px, env(safe-area-inset-left, 0px)) calc(3px + env(safe-area-inset-bottom, 0px)) max(4px, env(safe-area-inset-right, 0px)); background: var(--panel); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px -16px rgba(0,0,0,.4); }
+  .tab { flex-direction: column; justify-content: center; gap: 1px; border: 0; padding: 3px 2px; height: 44px; border-radius: 10px; text-align: center; }
   .tab[aria-selected="true"] { box-shadow: none; background: var(--well); }
-  .tab .ico { width: 22px; height: 22px; }
-  .tab-name { font-family: var(--font-body); font-weight: 600; font-size: 11.5px; }
+  .tab .ico { width: 20px; height: 20px; }
+  .tab-name { font-family: var(--font-body); font-weight: 600; font-size: 10.5px; }
   .tab-sub { display: none; }
-  .view-title { font-size: 21px; }
-  .view-sub { font-size: 13px; }
+  /* screen headings: just the title and its buttons, on as few rows as possible */
+  .view-head { gap: 8px; }
+  .view-title { font-size: 19px; }
+  .view-sub { display: none; }
   .panel { padding: 10px; border-radius: 12px; }
   .btn { height: 40px; }
   .btn.sm { height: 40px; min-height: 40px; }

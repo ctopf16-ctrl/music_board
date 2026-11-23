@@ -84,12 +84,29 @@ function buildTopbar() {
   const help = UI.button({ label: 'Help', icon: I.help, cls: 'ghost icon-only', text: false, tip: 'Tutorials for every screen and the full list of keyboard shortcuts.', onClick: openHelp });
   help.id = 'helpBtn';
 
+  const moreRow = h('div', { class: 'tgroup more-row', id: 'moreRow' }, mode, metro, keySel, modeSel, undo, redo);
+  const moreBtn = h('button', { class: 'btn ghost icon-only more-btn phone-only', 'aria-label': 'More controls', 'aria-controls': 'moreRow', 'aria-expanded': 'false',
+    'data-tip': 'Show or hide Loop / Song, Click, Key, Scale, Redo and Help.', 'data-tip-title': 'More', onclick: () => app.showMore(!bar.classList.contains('more-open'), true) },
+    h('span', { class: 'ico', html: I.chevron }));
   bar.append(
     brand,
     h('div', 'tgroup', play, rec), beats, h('span', 'tsep'),
     h('div', 'tgroup', tempo, h('span', 'desk-only', tap)),
-    h('div', { class: 'tgroup more-row' }, mode, metro, keySel, modeSel, undo, redo),
-    h('span', 'tsep'), h('span', 'desk-only', vol), scope, midiChip, menu, help);
+    moreRow,
+    h('span', 'tsep'), h('span', 'desk-only', vol), scope, midiChip, moreBtn, menu, help);
+
+  /* Phones get a one-row bar: Undo moves next to the menu, Help moves into the "more" row, and the ⌄ button
+     shows or hides that row. Desktop keeps the full bar. */
+  app.showMore = (open, remember) => {
+    bar.classList.toggle('more-open', open); moreBtn.setAttribute('aria-expanded', open);
+    if (remember) BB.storage.set('beatboard.moreOpen', open);
+  };
+  app.showMore(BB.storage.get('beatboard.moreOpen', false));
+  const phone = window.matchMedia('(max-width: 720px)');
+  const placeForScreen = () => {
+    if (phone.matches) { bar.insertBefore(undo, moreBtn); moreRow.append(help); } else { moreRow.insertBefore(undo, redo); bar.append(help); }
+  };
+  placeForScreen(); phone.addEventListener('change', placeForScreen);
 
   const sync = () => {
     $('#songName').textContent = p().name;
@@ -307,10 +324,10 @@ BB.tutorial.register('welcome', {
   steps: [
     { target: '#playBtn', title: 'Press Play', text: 'A demo song is loaded so you can hear what Beat Board does. Press <b>Play</b> (or <b>Space</b>) any time to start and stop.' },
     { target: '#tabs', title: 'Six screens', text: '<b>Loops</b> mixes clips live. <b>Beat</b> is the drum machine. <b>Keys</b> is a piano and note editor. <b>Chords</b> has pads that are always in tune. <b>Mixer</b> sets levels and effects. <b>Song</b> puts it all in order.' },
-    { target: '.topbar .stepper', title: 'Tempo and key', text: 'Set the speed here. Next to it, <b>Key</b> and <b>Scale</b> set the notes your song uses; everything stays in tune when you change them.' },
+    { target: '.topbar .stepper', before: () => app.showMore(true), title: 'Tempo and key', text: 'Set the speed here. Next to it, <b>Key</b> and <b>Scale</b> set the notes your song uses; everything stays in tune when you change them.' },
     { target: '.rec-btn', title: 'Record', text: 'Turn on Record, then play pads, keys or chords. Everything lands in time with the beat. Made a mistake? <b>Undo</b> is right next to it.' },
     { target: () => $('.view:not([hidden]) .tour-btn') || $('#helpBtn'), title: 'Tutorials everywhere', text: 'Every screen has its own <b>Tutorial</b> button. Hover over any dial or button to see what it does (on a phone, press and hold).' },
-    { target: '#helpBtn', title: 'Your keyboard is an instrument', text: 'Tap drums on the <b>number pad</b> from any screen. Press a <b>letter</b> shown on a control to pick it, then use <b>← →</b> to change it. The full list is under Help.' },
+    { target: '#helpBtn', before: () => app.showMore(true), title: 'Your keyboard is an instrument', text: 'Tap drums on the <b>number pad</b> from any screen. Press a <b>letter</b> shown on a control to pick it, then use <b>← →</b> to change it. The full list is under Help.' },
   ],
   onDone: () => UI.toast('You are ready. Have fun!'),
 });

@@ -192,9 +192,8 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
 /* ---------- phones: one track at a time, toolbar above the tab bar ---------- */
 @media (max-width: 720px) {
   .lp-view { --lp-cell-h: 66px; --lp-gap: 6px; }
-  .lp-head { gap: 6px 10px; }
-  .lp-titles { flex-basis: 100%; }
-  .lp-head-actions { width: 100%; justify-content: space-between; }
+  .lp-head { gap: 6px 10px; flex-wrap: nowrap; }
+  .lp-titles { flex: 1 1 auto; }
   .lp-head-actions .btn { height: 40px; }
   .lp-start { padding: 12px; gap: 10px 12px; }
   .lp-start-art { display: none; }
@@ -236,7 +235,8 @@ button.lp-li:hover .lp-li-go { color: var(--ink); }
   .lp-dots i.has { background: color-mix(in oklab, var(--c) 45%, var(--line)); }
   .lp-dots i.on { background: var(--c); }
 
-  .lp-cell { padding: 9px 12px 11px; scroll-margin: 120px 8px 190px; }
+  .lp-cell { padding: 9px 12px 11px; scroll-margin: 70px 8px 180px; }
+  body:has(.topbar.more-open) .lp-cell { scroll-margin-top: 116px; }
   .lp-name { font-size: 15px; }
   .lp-bars { font-size: 10px; }
   .lp-prev { height: 22px; }

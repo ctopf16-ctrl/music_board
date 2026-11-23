@@ -447,14 +447,14 @@ Tour.show = function () {
     else shade.style.display = 'none';
     card.innerHTML = '';
     const n = A.def.steps.length;
-    card.append(
+    card.append(...[
       h('div', 'tour-top', h('span', 'tour-count', `${A.def.title} · ${A.i + 1} of ${n}`), h('button', { class: 'btn ghost icon-only sm', 'aria-label': 'Close tutorial', onclick: Tour.stop }, h('span', { class: 'ico', html: UI.ICONS.close }))),
       h('h3', null, st.title),
       h('p', { html: st.text }),
       st.task ? h('div', { class: 'tour-task', role: 'status' }, h('span', 'tour-task-mark', ''), h('span', { class: 'tour-task-text', html: st.task })) : null,
       h('div', 'tour-actions',
         A.i > 0 ? h('button', { class: 'btn ghost', onclick: () => Tour.go(-1) }, 'Back') : h('span'),
-        h('button', { class: 'btn primary', onclick: () => Tour.go(1) }, A.i === n - 1 ? 'Done' : (st.check ? 'Skip' : 'Next'))));
+        h('button', { class: 'btn primary', onclick: () => Tour.go(1) }, A.i === n - 1 ? 'Done' : (st.check ? 'Skip' : 'Next')))].filter(Boolean)); /* native append would print null */
     card.classList.toggle('floating', !!r && !BB.isMobile());
     if (r && !BB.isMobile()) {
       const cw = card.offsetWidth, chh = card.offsetHeight;
@@ -521,6 +521,7 @@ UI.ICONS = {
   redo: svg('<path d="m15 7 5 5-5 5M19.5 12H9a5 5 0 0 0 0 10h2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
   metro: svg('<path d="M9 3h6l4 18H5zM12 15l5-9" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'),
   menu: svg('<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
+  chevron: svg('<path d="M6 9.5l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>'),
   help: svg('<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5V14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.3" r="1.2" fill="currentColor"/>'),
   close: svg('<path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
   plus: svg('<path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>'),
